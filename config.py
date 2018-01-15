@@ -1,10 +1,12 @@
 #!/usr/bin/python
 from configparser import ConfigParser
  
- 
 def config(filename='database.ini', section='postgresql'):
+    """ Configure parameters from specified section """
+
     # create a parser
     parser = ConfigParser()
+
     # read config file
     parser.read(filename)
  
@@ -18,3 +20,6 @@ def config(filename='database.ini', section='postgresql'):
         raise Exception('Section {0} not found in the {1} file'.format(section, filename))
  
     return db
+
+
+
