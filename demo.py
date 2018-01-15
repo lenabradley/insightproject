@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import argparse
 import psycopg2
 from config import config
 from sqlalchemy import create_engine
@@ -8,7 +9,18 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
 from sklearn import datasets, linear_model
+import seaborn as sns
+
+# Input parser
+parser = argparse.ArgumentParser(
+    description='Analyze clinical trial dropout rates.')
+parser.add_argument('--plot', dest='plot', action='store_const',
+    const=True, default=False,
+    help='Create various plots (default: do not plot stuff)')
+
+# Custom settings
 # pd.set_option('display.width', 150)
+sns.set(style="white", color_codes='default', context='talk')
 
 def connectdb():
     """ Open and return SQLAlchemy engine connection to PostgreSQL database """
@@ -46,7 +58,6 @@ def calc_dropout(conn):
     - Various filtering has been implemented on both the dropout and overall 
         study data, to ex/include in/valid data entries. See code for details
     - Use 'nct_id' as indexing column
-
     """
     df = None
     if conn is not None:
@@ -80,8 +91,11 @@ def calc_dropout(conn):
         df = startdf.join(dropdf, how='inner')
         df['droprate'] = df['dropped']/df['enrolled']
 
-
     return df
+
+def remove_drops(df, thresh=1.0):
+    """ Return dataframe with entries above a given threshold of droprate removed"""
+    return df[df['droprate']<thresh]
 
 def calc_features(conn):
     """ Given database connection, gather various study features 
@@ -94,110 +108,174 @@ def calc_features(conn):
         df (DataFrame): Table with columns for various features, including
             'nct_id' (study ID) as the index
 
+    Note:
+    - Use 'nct_id' as indexing column
     """
+
+    df = pd.DataFrame()
+
+    # ============== Data from AACT Calculated_Values table (1)
     # Table of AACT calculated values
-    calcvals = pd.read_sql_table('calculated_values', conn)
+    if conn is not None:
+        keepcols = [
+            'nct_id', 'registered_in_calendar_year', 'actual_duration',
+            'number_of_facilities', 'has_us_facility', 'has_single_facility',
+            'minimum_age_num', 'minimum_age_unit', 
+            'maximum_age_num', 'maximum_age_unit']
+        calcvals = pd.read_sql_table('calculated_values', conn,
+            columns=keepcols)
 
-    # Calculate min age in years
-    minimum_age_years = calcvals['minimum_age_num'].copy()
-    filt = calcvals['minimum_age_unit'].isin(['Months', 'Month']) 
-    minimum_age_years[filt] = minimum_age_years[filt]/12 # convert from months
-    filt = calcvals['minimum_age_unit'].isin(['Weeks'])
-    minimum_age_years[filt] = minimum_age_years[filt]/52 # convert from weeks
-    filt = calcvals['minimum_age_unit'].isin(['Days'])
-    minimum_age_years[filt] = minimum_age_years[filt]/365 # convert from days
-    calcvals['minimum_age_years'] = minimum_age_years
+        # Calculate min age in years
+        minimum_age_years = calcvals['minimum_age_num'].copy()
+        notnull = calcvals['minimum_age_unit'].notnull()
+        filt = notnull & calcvals['minimum_age_unit'].str.contains('Month')
+        minimum_age_years[filt] = minimum_age_years[filt]/12 # convert from months
+        filt = notnull & calcvals['minimum_age_unit'].str.contains('Weeks')
+        minimum_age_years[filt] = minimum_age_years[filt]/52 # convert from weeks
+        filt = notnull & calcvals['minimum_age_unit'].str.contains('Days')
+        minimum_age_years[filt] = minimum_age_years[filt]/365 # convert from days
+        calcvals['minimum_age_years'] = minimum_age_years
 
-    # Calculate max age in years
-    maximum_age_years = calcvals['maximum_age_num'].copy() 
-    filt = calcvals['maximum_age_unit'].isin(['Months', 'Month']) 
-    maximum_age_years[filt] = maximum_age_years[filt]/12 # convert from months
-    filt = calcvals['maximum_age_unit'].isin(['Weeks'])
-    maximum_age_years[filt] = maximum_age_years[filt]/52 # convert from weeks
-    filt = calcvals['maximum_age_unit'].isin(['Days']) 
-    maximum_age_years[filt] = maximum_age_years[filt]/365 # convert from days
-    calcvals['maximum_age_years'] = maximum_age_years
+        # Calculate max age in years
+        maximum_age_years = calcvals['maximum_age_num'].copy()
+        notnull = calcvals['maximum_age_unit'].notnull()
+        filt = notnull & calcvals['maximum_age_unit'].str.contains('Month')
+        maximum_age_years[filt] = maximum_age_years[filt]/12 # convert from months
+        filt = notnull & calcvals['maximum_age_unit'].str.contains('Weeks')
+        maximum_age_years[filt] = maximum_age_years[filt]/52 # convert from weeks
+        filt = notnull & calcvals['maximum_age_unit'].str.contains('Days') 
+        maximum_age_years[filt] = maximum_age_years[filt]/365 # convert from days
+        filt = notnull & calcvals['maximum_age_unit'].str.contains('Hour') 
+        maximum_age_years[filt] = maximum_age_years[filt]/(365*24) # convert from hours
+        filt = notnull & calcvals['maximum_age_unit'].str.contains('Minute') 
+        maximum_age_years[filt] = maximum_age_years[filt]/(365*24*60) # convert from minutes
+        calcvals['maximum_age_years'] = maximum_age_years
 
-    # Select columns of interest (& rename some)
-    keepcols = ['nct_id', 'registered_in_calendar_year', 'number_of_facilities',
-        'actual_duration', 'has_us_facility', 'has_single_facility',
-        'minimum_age_years', 'maximum_age_years']
-    renaming = {
-        'registered_in_calendar_year': 'start_year',
-        'actual_duration': 'duration',
-        'number_of_facilities': 'num_facilities' }
-    df = calcvals[keepcols].rename(columns=renaming)
-    df['age_range_years'] = df['maximum_age_years']-df['minimum_age_years']
+        # Calculate age range
+        calcvals['age_range_years'] = \
+            calcvals['maximum_age_years'] - calcvals['minimum_age_years']
 
-    # Set study ID as index
-    df.set_index('nct_id', inplace=True)
+        # Select columns of interest (& rename some)
+        keepcols = [
+            'nct_id', 'registered_in_calendar_year', 'actual_duration',
+            'number_of_facilities', 'has_us_facility', 'has_single_facility',
+            'minimum_age_years', 'maximum_age_years', 'age_range_years']    
+        renaming = {
+            'registered_in_calendar_year': 'start_year',
+            'actual_duration': 'duration',
+            'number_of_facilities': 'num_facilities' }
+        df1 = calcvals[keepcols].copy().rename(columns=renaming)
+
+        # Overwrite existing data
+        df1.set_index('nct_id', inplace=True)
+        df = df1
+
+    # ============== Data from AACT Conditions table (2)
+    if conn is not None:
+        # Table of AACT-determined conditions
+        conditions = pd.read_sql_table('conditions', conn, 
+            columns=['nct_id', 'downcase_name'])    
+
+        # Does this condition include the word 'cancer'?
+        conditions['is_cancer'] = conditions['downcase_name'].str.contains(
+            '|'.join(('cancer', '[a-z]+oma', 'leukemia', 'tumor')))
+
+        # Collect to the study level
+        df2 = conditions[['nct_id','is_cancer']].groupby('nct_id').any()
+
+        # Merge with existing data
+        df = df.join(df2, how='inner')
 
     return df
 
+def tform_var(x, pow=0.5, plothist=False):
+    """ Transform input array values by the given power 
+
+    Args:
+        x (numpy.ndarray or similar): array to transform
+    Kwargs:
+        pow (float): Power apply to transform array
+        plothist (bool): Plot histogram of transformed array (default: False)
+
+    Return:
+        xtform (same as x): Transformed array
+    """
+    xtform = None
+    try:
+        xtform = x**pow
+    except:
+        pass
+
+    if xtform is not None and plothist:
+        plt.figure()
+        plt.hist(xtform, bins=50)
+        plt.show();
+
+    return xtform
+
 if __name__ == "__main__":
+    # Gather command line options
+    args = parser.parse_args()
 
     # establish connection to trials database
     conn = connectdb()
-    
-    # # histogram of number of study participants
-    # base_counts = pd.read_sql_table('baseline_counts', conn)
-    # plt.hist(base_counts['count'], bins=np.arange(0,1000,50))
-    # plt.xlabel('Number of study participants (people, elbows, ...)')
-    # plt.ylabel('Frequency')
-    # plt.title('%d studies total'%(len(base_counts['count'])))
-    # plt.show()
-
-    # # Top reasons for patient withdrawl
-    # drops = pd.read_sql_table('drop_withdrawals', conn)
-    # top_reasons = drops['reason'].value_counts();
-    # print(top_reasons[:10])
-
-
-    # # Top reasons for study termination
-    # studies = pd.read_sql_table('studies', conn)
-    # for (reason, number) in studies['why_stopped'].str.lower().value_counts()[:20].iteritems():
-    #     print('%s\t%d'%(reason, number))
-
-    # # Histogram of enrollment
-    # studies['enrollment'].hist(bins=np.arange(0,1e3,50))
-    # plt.show()
 
     # Collect data
-    df1 = calc_dropout(conn)
-    df2 = calc_features(conn)
-    df = df1.join(df2, how='inner')
-    df =  df[df['droprate']<1.0].copy()
+    df = calc_features(conn).join(calc_dropout(conn), how='inner')
 
-    # is this treating cancer?
-    df3 = pd.read_sql_table('conditions', conn)[['nct_id','downcase_name']].copy()
-    df3.set_index('nct_id', inplace=True)
-    df3['is_cancer'] = df3['downcase_name'].str.contains('cancer')
-    df = df.join(df3, how='inner')
+    # Transform droprate to be more normally distributed
+    df['droprate_tform'] = tform_var(df['droprate'], pow=0.4)
 
-    g = [
-        df[df['is_cancer'].notnull() & df['is_cancer']]['droprate'].values,
-        df[df['is_cancer'].notnull() & (df['is_cancer']==False)]['droprate'].values
-    ]
-    [print('{0:.5f} +/- {1:.5f}'.format(x.mean(), x.std()/len(x))) for x in g];
+    # # Remove high drop rates
+    # df = remove_drops(df)
+
+    # Plot stuff
+    if args.plot:
+
+        # Number of study participants histogram
+        f, ax = plt.subplots(figsize=(5, 4))
+        sns.distplot(df['enrolled'], bins=np.linspace(0, 1000, num=100), kde=False)
+        sns.despine(left=True)
+        ax.set(yticks=[], xlabel='Participants enrolled')
+        f.tight_layout()
+        f.show()
+
+        # Dropout rate +/- modification
+        f, ax = plt.subplots(figsize=(5, 4))
+        kwargs = {'bins':np.linspace(0, 1.1, 110), 'kde':False, 'norm_hist':True}
+        sns.distplot(df['droprate'], **kwargs, label='raw')
+        sns.distplot(df['droprate_tform'], **kwargs, label='transformed')
+        sns.despine(left=True)
+        ax.set(yticks=[], xlabel='dropout rate (fraction)')
+        ax.legend()
+        f.tight_layout()
+        f.show()
+
+        # Dropout rate +/- cancer
+        f, ax = plt.subplots(figsize=(5, 4))
+        kwargs = {'bins':np.linspace(0, 1.1, 50), 'kde':False, 'norm_hist':True}
+        sns.distplot(df[df['is_cancer'].notnull() & df['is_cancer']==True]['droprate_tform'], 
+            **kwargs, label='cancer')
+        sns.distplot(df[df['is_cancer'].notnull() & df['is_cancer']==False]['droprate_tform'], 
+            **kwargs, label='not cancer')
+        sns.despine(left=True)
+        ax.set(yticks=[], xlabel='dropout rate (fraction, transformed)')
+        ax.legend()
+        f.tight_layout()
+        f.show()
+
+        # Study duration histogram
+        f, ax = plt.subplots(figsize=(5,4))
+        sns.distplot(df[df['duration'].notnull()]['duration'], 
+            bins=np.linspace(0,200,50), kde=False)
+        sns.despine(left=True)
+        ax.set(yticks=[], xlabel='Study duration (months)')
+        f.tight_layout()
+        f.show()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        # Exploratory plots
+        # f, ax = plt.subplots(figsize=(5,4))
 
 
 
