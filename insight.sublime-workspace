@@ -1,0 +1,483 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"kw",
+				"kwargs"
+			],
+			[
+				"norm",
+				"norm_hist"
+			],
+			[
+				"enrol",
+				"enrolled"
+			],
+			[
+				"pars",
+				"parse_args"
+			],
+			[
+				"max",
+				"maximum_age_unit"
+			],
+			[
+				"set",
+				"set_index"
+			],
+			[
+				"droprate",
+				"droprate_tform"
+			],
+			[
+				"dropr",
+				"droprate"
+			],
+			[
+				"colum",
+				"column"
+			],
+			[
+				"remove",
+				"remove_drops"
+			],
+			[
+				"thres",
+				"thresh"
+			],
+			[
+				"Data",
+				"DataFrame"
+			],
+			[
+				"ag",
+				"age_range_years"
+			],
+			[
+				"minim",
+				"minimum_age_unit"
+			],
+			[
+				"index",
+				"index_col"
+			],
+			[
+				"va",
+				"values"
+			],
+			[
+				"value",
+				"value_counts"
+			],
+			[
+				"is",
+				"is_cancer"
+			],
+			[
+				"drop",
+				"droprate"
+			],
+			[
+				"down",
+				"downcase_name"
+			],
+			[
+				"ga",
+				"gather_features"
+			],
+			[
+				"min",
+				"minimum_age_years"
+			],
+			[
+				"nu",
+				"number_of_facilities"
+			],
+			[
+				"actual",
+				"actual_duration"
+			],
+			[
+				"renam",
+				"renaming"
+			],
+			[
+				"ren",
+				"rename"
+			],
+			[
+				"mi",
+				"minimum_age_num"
+			],
+			[
+				"calv",
+				"calcvals"
+			],
+			[
+				"conn",
+				"connectdb"
+			],
+			[
+				"cal",
+				"calc_dropout"
+			],
+			[
+				"enr",
+				"enrolled"
+			],
+			[
+				"enro",
+				"enrollment"
+			],
+			[
+				"stud",
+				"study_type"
+			],
+			[
+				"en",
+				"enrollment_type"
+			],
+			[
+				"ac",
+				"actual"
+			],
+			[
+				"group",
+				"groupby"
+			],
+			[
+				"read",
+				"read_sql_table"
+			],
+			[
+				"b",
+				"baseline_counts"
+			],
+			[
+				"try",
+				"try\tTry/Except"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "demo.py",
+			"settings":
+			{
+				"buffer_size": 11098,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
+			"settings":
+			{
+				"buffer_size": 21434,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "Package Control Messages\n========================\n\nAnaconda\n--------\n\n  \n  \n                                                            |\n                _` |  __ \\    _` |   __|   _ \\   __ \\    _` |   _` |\n               (   |  |   |  (   |  (     (   |  |   |  (   |  (   |\n              \\__,_| _|  _| \\__,_| \\___| \\___/  _|  _| \\__,_| \\__,_|\n  \n                                       The Sublime Text 3 Python IDE\n  \n  \n  Welcome to anaconda, the Sublime Text 3 Python IDE. We hope you enjoy it :)\n  \n  Anaconda works fine out of the box but you can configure it to totally adapt\n  it to your needs or style.\n  \n  For a complete guide of use and configuration take a look at:\n  \n  \thttp://damnwidget.github.io/anaconda/\n  \n  Please, consider donating to maintain this project alive:\n  \n  \thttps://pledgie.com/campaigns/32230\n",
+			"settings":
+			{
+				"buffer_size": 828,
+				"line_ending": "Unix",
+				"name": "Package Control Messages",
+				"read_only": true,
+				"scratch": true
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 392.0,
+		"last_filter": "package",
+		"selected_items":
+		[
+			[
+				"package",
+				"Package Control: Install Package"
+			]
+		],
+		"width": 461.0
+	},
+	"console":
+	{
+		"height": 366.0,
+		"history":
+		[
+			"view.run_command(\"fold_all\")",
+			"import urllib.request,os,hashlib; h = '6f4c264a24d933ce70df5dedcf1dcaee' + 'ebe013ee18cced0ef93d5f746d80ef60'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/home/lena/.config/sublime-text-3/Packages/User/Anaconda.sublime-settings",
+		"/home/lena/Insight/project/config.py",
+		"/home/lena/Desktop/anaconda-navigator.desktop",
+		"/home/lena/Insight/insightproject/.gitignore.txt",
+		"/home/lena/Insight/project/app/flaskexample/templates/output.html",
+		"/home/lena/Insight/project/app/flaskexample/views.py",
+		"/home/lena/Insight/project/app/a_Model.py",
+		"/home/lena/Insight/project/app/flaskexample/templates/input.html",
+		"/home/lena/Insight/project/app/run.py",
+		"/home/lena/Insight/project/app/flaskexample/templates/index.html",
+		"/home/lena/Insight/project/app/flaskexample/__init__.py",
+		"/home/lena/Insight/project/app/flaskexample/templates/cesarian.html",
+		"/home/lena/Insight/project/app/flaskexample/cesareans.html",
+		"/home/lena/Insight/project/app/cesareans.html",
+		"/home/lena/Insight/project/app/flaskexample/run.py",
+		"/home/lena/Insight/project/database.ini",
+		"/home/lena/Insight/project/demo.py",
+		"/home/lena/Insight/project/demo2.py"
+	],
+	"find":
+	{
+		"height": 39.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"lint",
+			"conn",
+			"drops = pd.read_sql_table('drop_withdrawals', conn)",
+			"starter-template.css"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "demo.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 11098,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"auto_complete_triggers":
+							[
+								{
+									"characters": "<",
+									"selector": "text.html"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
+								}
+							],
+							"rulers":
+							[
+								80
+							],
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 21434,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								10933,
+								10933
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JSON.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 4694.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 828,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								685,
+								685
+							]
+						],
+						"settings":
+						{
+							"auto_indent": false,
+							"syntax": "Packages/Text/Plain text.tmLanguage",
+							"tab_width": 2,
+							"word_wrap": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 27.0
+	},
+	"input":
+	{
+		"height": 38.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "Packages/Python/Python.sublime-build",
+	"project": "insight.sublime-project",
+	"replace":
+	{
+		"height": 50.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 150.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}

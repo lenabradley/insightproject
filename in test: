@@ -1,0 +1,5 @@
+Help on function search in module re:
+
+sseeaarrcchh(pattern, string, flags=0)
+    Scan through string looking for a match to the pattern, returning
+    a match object, or None if no match was found.
