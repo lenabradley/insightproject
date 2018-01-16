@@ -4,6 +4,26 @@
 		"selected_items":
 		[
 			[
+				"ax",
+				"axes\tfunction"
+			],
+			[
+				"R",
+				"Ridge\tclass"
+			],
+			[
+				"p",
+				"predict\tfunction"
+			],
+			[
+				"f",
+				"fit\tfunction"
+			],
+			[
+				"lin",
+				"linear_model\tmodule"
+			],
+			[
 				"kw",
 				"kwargs"
 			],
@@ -167,29 +187,18 @@
 			"file": "demo.py",
 			"settings":
 			{
-				"buffer_size": 11098,
+				"buffer_size": 11391,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
+			"file": "insight.sublime-project",
 			"settings":
 			{
-				"buffer_size": 21434,
+				"buffer_size": 339,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
-			}
-		},
-		{
-			"contents": "Package Control Messages\n========================\n\nAnaconda\n--------\n\n  \n  \n                                                            |\n                _` |  __ \\    _` |   __|   _ \\   __ \\    _` |   _` |\n               (   |  |   |  (   |  (     (   |  |   |  (   |  (   |\n              \\__,_| _|  _| \\__,_| \\___| \\___/  _|  _| \\__,_| \\__,_|\n  \n                                       The Sublime Text 3 Python IDE\n  \n  \n  Welcome to anaconda, the Sublime Text 3 Python IDE. We hope you enjoy it :)\n  \n  Anaconda works fine out of the box but you can configure it to totally adapt\n  it to your needs or style.\n  \n  For a complete guide of use and configuration take a look at:\n  \n  \thttp://damnwidget.github.io/anaconda/\n  \n  Please, consider donating to maintain this project alive:\n  \n  \thttps://pledgie.com/campaigns/32230\n",
-			"settings":
-			{
-				"buffer_size": 828,
-				"line_ending": "Unix",
-				"name": "Package Control Messages",
-				"read_only": true,
-				"scratch": true
 			}
 		}
 	],
@@ -213,9 +222,10 @@
 	},
 	"console":
 	{
-		"height": 366.0,
+		"height": 215.0,
 		"history":
 		[
+			"print('hi')",
 			"view.run_command(\"fold_all\")",
 			"import urllib.request,os,hashlib; h = '6f4c264a24d933ce70df5dedcf1dcaee' + 'ebe013ee18cced0ef93d5f746d80ef60'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
 		]
@@ -231,6 +241,8 @@
 	},
 	"file_history":
 	[
+		"/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
+		"/home/lena/Insight/project/insight.sublime-project",
 		"/home/lena/.config/sublime-text-3/Packages/User/Anaconda.sublime-settings",
 		"/home/lena/Insight/project/config.py",
 		"/home/lena/Desktop/anaconda-navigator.desktop",
@@ -252,7 +264,7 @@
 	],
 	"find":
 	{
-		"height": 39.0
+		"height": 30.0
 	},
 	"find_in_files":
 	{
@@ -296,15 +308,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 11098,
+						"buffer_size": 11391,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								10850,
+								10850
 							]
 						],
 						"settings":
@@ -314,6 +326,10 @@
 								{
 									"characters": "<",
 									"selector": "text.html"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -329,7 +345,7 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 0.0,
+						"translation.y": 2112.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
@@ -337,62 +353,31 @@
 				},
 				{
 					"buffer": 1,
-					"file": "/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
+					"file": "insight.sublime-project",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 21434,
+						"buffer_size": 339,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								10933,
-								10933
+								243,
+								243
 							]
 						],
 						"settings":
 						{
 							"syntax": "Packages/JavaScript/JSON.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 4694.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 828,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								685,
-								685
-							]
-						],
-						"settings":
-						{
-							"auto_indent": false,
-							"syntax": "Packages/Text/Plain text.tmLanguage",
-							"tab_width": 2,
-							"word_wrap": true
+							"translate_tabs_to_spaces": false
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 1,
 					"type": "text"
 				}
 			]
@@ -400,7 +385,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 27.0
+		"height": 30.0
 	},
 	"input":
 	{
@@ -429,15 +414,19 @@
 		]
 	},
 	"menu_visible": true,
+	"output.exec":
+	{
+		"height": 269.0
+	},
 	"output.find_results":
 	{
 		"height": 0.0
 	},
-	"pinned_build_system": "Packages/Python/Python.sublime-build",
+	"pinned_build_system": "Anaconda Python Builder",
 	"project": "insight.sublime-project",
 	"replace":
 	{
-		"height": 50.0
+		"height": 56.0
 	},
 	"save_all_on_build": true,
 	"select_file":
@@ -475,7 +464,7 @@
 	"show_open_files": false,
 	"show_tabs": true,
 	"side_bar_visible": true,
-	"side_bar_width": 150.0,
+	"side_bar_width": 191.0,
 	"status_bar_visible": true,
 	"template_settings":
 	{

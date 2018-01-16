@@ -10,6 +10,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 from sklearn import datasets, linear_model
 import seaborn as sns
+import statsmodels.formula.api as smf
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
 # Input parser
 parser = argparse.ArgumentParser(
@@ -104,7 +106,7 @@ def remove_drops(df, thresh=1.0):
 
 
 def calc_features(conn):
-    """ Given database connection, gather various study features 
+    """ Given database connection, gather various study features
 
     Args:
         conn (engine): Connection to AACT database (sqlalchemy engine 
@@ -229,6 +231,43 @@ def tform_var(x, pow=0.5, plothist=False):
     return xtform
 
 
+def diagnotic_plots(res, show=False):
+    """ Plot diagnostic plots regression results object 
+    
+    Args:
+        res (statsmodels.regression.linear_model.RegressionResultsWrapper):
+            Results of fitting linear regression model
+
+    Kwargs:
+        show (bool): If true, call the matplotlib.pyplot.show on each figure
+                     before exiting (default: False)
+
+    Return:
+        fig (tuple of matplotlib.figure.Figure): figure handles to...
+            fig[0]  Historam  of fit residuals (check normality)
+            fig[1]  Plot of predicted values vs residuals (check homogeneity)
+    """
+
+    # Histogram of residuals
+    f1, ax1 = plt.figure(figsize=(5,4)), plt.axes()
+    sns.distplot(res.resid, bins=50, kde=False)
+    sns.despine(left=True)
+    ax1.set(yticks=[], xlabel='droprate_tform residual')
+    f1.tight_layout()
+
+    # Plot residual vs predicted
+    f2, ax2 = plt.figure(figsize=(5,4)), plt.axes()
+    plt.plot(res.predict(), res.resid.values, '.')
+    ax2.set(xlabel='predicted', ylabel='residual')
+    f2.tight_layout()
+
+    if show:
+        f1.show()
+        f2.show()
+
+    return (f1, f2)
+
+
 if __name__ == "__main__":
     # Gather command line options
     args = parser.parse_args()
@@ -293,16 +332,26 @@ if __name__ == "__main__":
         f.tight_layout()
         f.show()
 
-    # Exploratory linear fity
-    from sklearn import linear_model
-    reg = linear_model.Ridge(alpha=0.1, normalize=True)
 
-    xcols = ['start_year', 'duration', 'num_facilities','is_cancer']
-    ycol = ['droprate_tform']
+    # Implement linear model (via statsmodels)
+    formula = ('droprate_tform ~ ' +
+               'duration + has_us_facility + is_cancer')
+    model = smf.ols(formula, data=df)
+    res = model.fit()
+    print(res.summary())
 
-    X = df[xcols+ycol].dropna(how='any')[xcols].as_matrix()
-    y = df[xcols+ycol].dropna(how='any')[ycol].as_matrix()
+    # Check residuals for normality, homogeneity
+    for x in diagnotic_plots(res):
+        x.show()
 
-    reg.fit(X, y)
-    reg.coef_
+    # Get predicted values & confidence intervals
+    predstd, interval_l, interval_u = wls_prediction_std(res)
 
+    # - Gather subset of data of interest
+    interval_l_df = interval_l.to_frame(name='lower')
+    interval_u_df = interval_u.to_frame(name='upper')
+    intervals = interval_l_df.join(interval_u_df)
+    model_data = df['duration'].to_frame(name='duration').join(intervals, 
+                                                               how='inner')
+
+    # - Plot predicted value / CIs
