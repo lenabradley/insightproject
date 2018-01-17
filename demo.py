@@ -3,12 +3,12 @@ import argparse
 import psycopg2
 from config import config
 from sqlalchemy import create_engine
-from sqlalchemy_utils import database_exists, create_database
-import psycopg2
+# from sqlalchemy_utils import database_exists, create_database
+# import psycopg2
 import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
-from sklearn import datasets, linear_model
+# from sklearn import datasets, linear_model
 import seaborn as sns
 import statsmodels.formula.api as smf
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
@@ -19,6 +19,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument('--plot', dest='plot', action='store_const',
                     const=True, default=False,
                     help='Create various plots (default: do not plot stuff)')
+parser.add_argument('--fit', dest='fit', action='store_const',
+                    const=True, default=False,
+                    help='Fit linear model (default: do not fit model)')
 
 # Custom settings
 # pd.set_option('display.width', 150)
@@ -26,7 +29,7 @@ sns.set(style="white", color_codes='default', context='talk')
 
 
 def connectdb():
-    """ Open and return SQLAlchemy engine connection to PostgreSQL database """
+    """ Open and return SQLAlchemy engine to PostgreSQL database """
 
     # read connection parameters
     params = config()
@@ -39,11 +42,11 @@ def connectdb():
     return engine
 
 
-def calc_dropout(conn):
+def calc_dropout(engine):
     """ Given database connection, calculate enrollment & drop out totals, rate
 
     Args:
-        conn (engine): Connection to AACT database (sqlalchemy engine
+        engine (engine): Connection to AACT database (sqlalchemy engine
             connnection to postgresql database)
 
     Return:
@@ -59,12 +62,12 @@ def calc_dropout(conn):
     - Use 'nct_id' as indexing column
     """
     df = None
-    if conn is not None:
+    if engine is not None:
 
         # Calculate number of participants dropped from each study
         keepcols = ['count']
         renaming = {'count': 'dropped'}
-        drops = pd.read_sql_table('drop_withdrawals', conn)  # withdrawl table
+        drops = pd.read_sql_table('drop_withdrawals', engine)  # withdrawl table
         filt = (
             # only look at 'Overall Study' period
             drops['period'].isin(['Overall Study']) &
@@ -77,7 +80,7 @@ def calc_dropout(conn):
         # Collect total number of participants actually enrolled in study
         keepcols = ['nct_id', 'enrollment']
         renaming = {'enrollment': 'enrolled'}
-        studies = pd.read_sql_table('studies', conn)
+        studies = pd.read_sql_table('studies', engine)
         filt = (
             # Interventional studies only
             studies['study_type'].isin(['Interventional']) &
@@ -105,11 +108,11 @@ def remove_drops(df, thresh=1.0):
     return df[df['droprate'] < thresh]
 
 
-def calc_features(conn):
+def calc_features(engine):
     """ Given database connection, gather various study features
 
     Args:
-        conn (engine): Connection to AACT database (sqlalchemy engine 
+        engine (engine): Connection to AACT database (sqlalchemy engine 
             connnection to postgresql database)
 
     Return:
@@ -124,13 +127,13 @@ def calc_features(conn):
 
     # ============== Data from AACT Calculated_Values table (1)
     # Table of AACT calculated values
-    if conn is not None:
+    if engine is not None:
         keepcols = [
             'nct_id', 'registered_in_calendar_year', 'actual_duration',
             'number_of_facilities', 'has_us_facility', 'has_single_facility',
             'minimum_age_num', 'minimum_age_unit',
             'maximum_age_num', 'maximum_age_unit']
-        calcvals = pd.read_sql_table('calculated_values', conn,
+        calcvals = pd.read_sql_table('calculated_values', engine,
                                      columns=keepcols)
 
         # Calculate min age in years
@@ -187,9 +190,9 @@ def calc_features(conn):
         df = df1
 
     # ============== Data from AACT Conditions table (2)
-    if conn is not None:
+    if engine is not None:
         # Table of AACT-determined conditions
-        conditions = pd.read_sql_table('conditions', conn,
+        conditions = pd.read_sql_table('conditions', engine,
                                        columns=['nct_id', 'downcase_name'])
 
         # Does this condition include the word 'cancer'?
@@ -203,32 +206,6 @@ def calc_features(conn):
         df = df.join(df2, how='inner')
 
     return df
-
-
-def tform_var(x, pow=0.5, plothist=False):
-    """ Transform input array values by the given power 
-
-    Args:
-        x (numpy.ndarray or similar): array to transform
-    Kwargs:
-        pow (float): Power apply to transform array
-        plothist (bool): Plot histogram of transformed array (default: False)
-
-    Return:
-        xtform (same as x): Transformed array
-    """
-    xtform = None
-    try:
-        xtform = x**pow
-    except:
-        pass
-
-    if xtform is not None and plothist:
-        plt.figure()
-        plt.hist(xtform, bins=50)
-        plt.show()
-
-    return xtform
 
 
 def diagnotic_plots(res, show=False):
@@ -268,21 +245,40 @@ def diagnotic_plots(res, show=False):
     return (f1, f2)
 
 
+def get_data(savename=None):
+    """ Connect to AACT database and gather data/featuresof interest
+    
+    Kwargs:
+        savename (string): If not None, save the resulting DataFrame with
+                           data to this file name using pickle
+    
+    Return:
+        df (DataFrame): Pandas DataFrame with data features and responses
+    """
+
+    # establish connection to trials database
+    engine = connectdb()
+
+    # Collect data
+    df = calc_features(engine).join(calc_dropout(engine), how='inner')
+
+    # Remove high drop rates
+    df = remove_drops(df)
+
+    # Save
+    if savename is not None:
+        df.to_pickle(savename)
+
+    # Return
+    return df
+
+
 if __name__ == "__main__":
     # Gather command line options
     args = parser.parse_args()
 
-    # establish connection to trials database
-    conn = connectdb()
-
-    # Collect data
-    df = calc_features(conn).join(calc_dropout(conn), how='inner')
-
-    # Transform droprate to be more normally distributed
-    df['droprate_tform'] = tform_var(df['droprate'], pow=0.4)
-
-    # # Remove high drop rates
-    # df = remove_drops(df)
+    # Gather data
+    df = get_data(savename='data.pkl')
 
     # Plot stuff
     if args.plot:
@@ -332,26 +328,51 @@ if __name__ == "__main__":
         f.tight_layout()
         f.show()
 
+    # Implement linear model
+    if args.fit:
+        # Implement linear model (via statsmodels)
+        formula = ('droprate**2 ~ ' +
+                   'duration + has_us_facility + is_cancer')
+        model = smf.ols(formula, data=df)
+        res = model.fit()
+        print(res.summary())
 
-    # Implement linear model (via statsmodels)
-    formula = ('droprate_tform ~ ' +
-               'duration + has_us_facility + is_cancer')
-    model = smf.ols(formula, data=df)
-    res = model.fit()
-    print(res.summary())
+        # Check residuals for normality, homogeneity
+        for x in diagnotic_plots(res):
+            x.show()
 
-    # Check residuals for normality, homogeneity
-    for x in diagnotic_plots(res):
-        x.show()
+        # Get predicted values & confidence intervals
+        predstd, interval_l, interval_u = wls_prediction_std(res)
 
-    # Get predicted values & confidence intervals
-    predstd, interval_l, interval_u = wls_prediction_std(res)
+        # - Gather subset of data of interest
+        interval_l_df = interval_l.to_frame(name='lower')
+        interval_u_df = interval_u.to_frame(name='upper')
+        intervals = interval_l_df.join(interval_u_df)
+        model_data = df[['duration','droprate_tform','is_cancer']].\
+            join(intervals, how='inner')
+        model_data['pred_droprate'] = res.predict()
+        model_data = model_data.sort_values('duration')
 
-    # - Gather subset of data of interest
-    interval_l_df = interval_l.to_frame(name='lower')
-    interval_u_df = interval_u.to_frame(name='upper')
-    intervals = interval_l_df.join(interval_u_df)
-    model_data = df['duration'].to_frame(name='duration').join(intervals, 
-                                                               how='inner')
+        # - Plot predicted value / CIs
+        x = model_data['duration']
+        y = model_data['droprate_tform']
+        ypred = model_data['pred_droprate']
+        ypred_l = model_data['lower']
+        ypred_u = model_data['upper']
 
-    # - Plot predicted value / CIs
+        f, ax = plt.subplots(ncols=2, figsize=(10,4))
+        for cval in [False, True]:
+            filt = model_data['is_cancer']==cval
+            x = model_data[filt]['duration']
+            y = model_data[filt]['droprate_tform']
+            yp = model_data[filt]['pred_droprate']
+            yl = model_data[filt]['lower']
+            yu = model_data[filt]['upper'] 
+            ax[int(cval)].scatter(x, y, marker='o', alpha=0.75)
+            ax[int(cval)].plot(x, yp, '-', color='k')
+            ax[int(cval)].fill_between(x, yl, yu, alpha=0.25, label='95%CI')
+            ax[int(cval)].set(title='is_cancer {}'.format(cval),
+                              xlabel='study duration',
+                              ylabel='droprate_tform')
+            ax[int(cval)].legend()
+        f.show()
