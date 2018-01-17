@@ -4,15 +4,15 @@ from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly.graph_objs as go
-import pandas as pd
+import statsmodels.api as sm
+import numpy as np
 
-#  Initialize Dash app
+# ================== Import data/model
+res = sm.load('../res.pkl')
+currdata = res.model.data.frame.iloc[1000]
+
+#  =================  Dash app
 app = dash.Dash()
-
-
-# Import data
-df = pd.read_pickle('../data.pkl')
-df['nct_id'] = df.index
 
 app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"})
 
@@ -22,19 +22,36 @@ app.layout = html.Div(children=[
 
     html.Div(children='Dash: A web application framework for Python.'),
 
-    html.Label('Is study addressing cancer?'),
-
-    dcc.RadioItems(
-        id='selectcancer',
-        options=[
-            {'label': 'Yes', 'value': 'iscancer'},
-            {'label': 'No', 'value': 'notcancer'},
-        ],
-        value='iscancer'
+    html.Div(children=[
+        html.Label('What year will you start?'),
+        dcc.Slider(
+            min=1999,
+            max=2020,
+            step=1,
+            marks={i: '{}'.format(i) for i in range(2000, 2021, 5)},
+            value=2018,
+        )],
+        id='start_year_slider', 
+        style={'margin-top': 40, 'margin-bottom': 10}
     ),
 
-    dcc.Graph(id='graph1')
-])
+    html.Div(children=[
+        html.Label('Is study addressing cancer?'),
+        dcc.RadioItems(
+            id='selectcancer',
+            options=[
+                {'label': 'Yes', 'value': 'iscancer'},
+                {'label': 'No', 'value': 'notcancer'},
+            ],
+            value='iscancer'
+        )],
+        id='cancer_radio',
+        style={'margin-top': 40, 'margin-bottom': 10}
+    ),
+
+    dcc.Graph(id='graph1'),
+],
+style={'align':'center', 'width':'50%', 'margin':'auto'})
 
 
 @app.callback(

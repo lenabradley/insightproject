@@ -9,6 +9,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
 # from sklearn import datasets, linear_model
+from sklearn.model_selection import train_test_split
 import seaborn as sns
 import statsmodels.formula.api as smf
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
@@ -16,6 +17,14 @@ from statsmodels.sandbox.regression.predstd import wls_prediction_std
 # Input parser
 parser = argparse.ArgumentParser(
     description='Analyze clinical trial dropout rates.')
+parser.add_argument('--getdata', dest='getdata', action='store_const',
+                    const=True, default=False,
+                    help='Gather data of interest (default: do not get data)')
+parser.add_argument('--savedata', dest='savedata', action='store_const', 
+                    const=True, default=False,
+                    help='Save dataframe (default: do not save data)')
+parser.add_argument('--loaddata', dest='loaddata', action='store', default=None,
+                    help='Load dataframe from given filename (default: None, do not load data)')
 parser.add_argument('--plot', dest='plot', action='store_const',
                     const=True, default=False,
                     help='Create various plots (default: do not plot stuff)')
@@ -27,7 +36,7 @@ parser.add_argument('--fit', dest='fit', action='store_const',
 # pd.set_option('display.width', 150)
 sns.set(style="white", color_codes='default', context='talk')
 
-
+# ===================== Functions to gather data
 def connectdb():
     """ Open and return SQLAlchemy engine to PostgreSQL database """
 
@@ -208,41 +217,63 @@ def calc_features(engine):
     return df
 
 
-def diagnotic_plots(res, show=False):
-    """ Plot diagnostic plots regression results object 
-    
+def all_feature_plots(df, response_name='droprate', show=False, savedir=None):
+    """ Given data table, plot the response against each feature
+
     Args:
-        res (statsmodels.regression.linear_model.RegressionResultsWrapper):
-            Results of fitting linear regression model
-
-    Kwargs:
-        show (bool): If true, call the matplotlib.pyplot.show on each figure
-                     before exiting (default: False)
-
-    Return:
-        fig (tuple of matplotlib.figure.Figure): figure handles to...
-            fig[0]  Historam  of fit residuals (check normality)
-            fig[1]  Plot of predicted values vs residuals (check homogeneity)
+        df (DataFrame): pandas dataframe with data to plot
+        response_name (str): string specifying the column to use as response 
+                             variable
+        show (bool): If true, use matplotlib.pyplot.show to render each plot, 
+                     otherwise close on completion
+        savedir (str): String specifying directory/folder to save plots. If 
+                       none, do not save. Plots are saved in the given folder as 
+                       "[feature_name] vs [response_name].png"
+    Returns:
+        f (list): list of figure (handle, axes) tuples for the plots created
     """
 
-    # Histogram of residuals
-    f1, ax1 = plt.figure(figsize=(5,4)), plt.axes()
-    sns.distplot(res.resid, bins=50, kde=False)
-    sns.despine(left=True)
-    ax1.set(yticks=[], xlabel='droprate_tform residual')
-    f1.tight_layout()
+    # Which features to plot?
+    cont_features = ['start_year', 'duration', 'num_facilities',
+                     'minimum_age_years', 'maximum_age_years',
+                     'age_range_years', 'enrolled']
+    cat_features = ['has_us_facility', 'is_cancer', 'has_single_facility']
 
-    # Plot residual vs predicted
-    f2, ax2 = plt.figure(figsize=(5,4)), plt.axes()
-    plt.plot(res.predict(), res.resid.values, '.')
-    ax2.set(xlabel='predicted', ylabel='residual')
-    f2.tight_layout()
+    f = []
+    sns.set_style("dark")
 
-    if show:
-        f1.show()
-        f2.show()
+    # Plot continuous features as scatter plots
+    for name in cont_features:
+        fig, ax = plt.subplots(figsize=(5,4))
+        sns.regplot(x=name, y=response_name, data=df)
+        ax.set(xlabel=name, ylabel=response_name)
+        fig.tight_layout()
+        f.append((fig, ax))
 
-    return (f1, f2)
+        # save to file
+        if savedir is not None:
+            fig.savefig('{}/{} vs {}.png'.format(savedir, response_name, name))
+
+    # Plot categorical features as box plots
+    for name in cat_features:
+        fig, ax = plt.subplots(figsize=(5,4))
+        sns.boxplot(x=name, y=response_name, data=df)
+        ax.set(xlabel=name, ylabel=response_name)
+        fig.tight_layout()
+        f.append((fig, ax))
+
+        # save to file
+        if savedir is not None:
+            fig.savefig('{}/{} vs {}.png'.format(savedir, response_name, name))
+
+    # Render plots, if requested
+    for tup in f:
+        if show:
+            tup[0].show()
+        else:
+            plt.close(tup[0])
+
+    return f
 
 
 def get_data(savename=None):
@@ -273,15 +304,92 @@ def get_data(savename=None):
     return df
 
 
+# ===================== Functions regarding model/fitting
+def diagnotic_plots(res, show=False):
+    """ Create diagnostic plots from regression results object (residuals)
+    
+    Args:
+        res (statsmodels.regression.linear_model.RegressionResultsWrapper):
+            Results of fitting linear regression model
+
+    Kwargs:
+        show (bool): If true, call the matplotlib.pyplot.show on each figure
+                     before exiting (default: False)
+
+    Return:
+        fig (tuple of matplotlib.figure.Figure): figure handles to...
+            fig[0]  Historam  of fit residuals (check normality)
+            fig[1]  Plot of predicted values vs residuals (check homogeneity)
+    """
+
+    # Histogram of residuals
+    f1, ax1 = plt.figure(figsize=(5,4)), plt.axes()
+    sns.distplot(res.resid, bins=50, kde=False)
+    sns.despine(left=True)
+    ax1.set(yticks=[], xlabel='droprate_tform residual')
+    f1.tight_layout()
+
+    # Plot residual vs predicted (homogeneous)
+    f2, ax2 = plt.figure(figsize=(5,4)), plt.axes()
+    plt.plot(res.predict(), res.resid.values, '.')
+    ax2.set(xlabel='predicted', ylabel='residual')
+    f2.tight_layout()
+
+    if show:
+        f1.show()
+        f2.show()
+
+    return (f1, f2)
+
+
+def eval_preds(df, res): # IN PROGRESS
+    """ Given test data and statsmodel linear model fit, caculate RMS error
+    Args:
+        df (DataFrame): pandas.DataFrame with data to predict
+        res (statsmodels results structure): Contains fitted model
+    
+    Returns:
+        rmse (): root mean square error between actual vs predicted dropout rate
+    """
+    actual = df['droprate'].to_frame(name='actual')
+
+    pred = (res.predict(df)**(1./0.3)).to_frame(name='predicted') # undo modification
+
+    errordf = actual.join(pred)
+    errordf['resid'] = (errordf['actual']-errordf['predicted'])
+
+    return None
+
+
+# ===================== MAIN
 if __name__ == "__main__":
     # Gather command line options
     args = parser.parse_args()
 
-    # Gather data
-    df = get_data(savename='data.pkl')
+    # Get data
+    df = None
+    if args.loaddata is not None:
+        # Load existing data (first choice)
+        df = pd.read_pickle(args.loaddata)       
+
+    elif args.getdata:
+        # Save this new data?
+        savename = None
+        if args.savedata:
+            savename='data.pkl'
+
+        #  Gather new data
+        df = get_data(savename=None)
+
+        # Split out test/training data
+        dfsplit = train_test_split(df)
+
+        # Save training and testing data
+        dfsplit[0].to_pickle('training_data.pkl')
+        dfsplit[1].to_pickle('testing_data.pkl')
 
     # Plot stuff
-    if args.plot:
+    if args.plot and df is not None:
 
         # Number of study participants histogram
         f, ax = plt.subplots(figsize=(5, 4))
@@ -328,11 +436,11 @@ if __name__ == "__main__":
         f.tight_layout()
         f.show()
 
-    # Implement linear model
-    if args.fit:
+    # Fit linear model
+    if args.fit and df is not None:
         # Implement linear model (via statsmodels)
-        formula = ('droprate**2 ~ ' +
-                   'duration + has_us_facility + is_cancer')
+        formula = ('droprate**(1/2) ~ ' +
+                   'duration*C(has_us_facility)*C(is_cancer)')
         model = smf.ols(formula, data=df)
         res = model.fit()
         print(res.summary())
