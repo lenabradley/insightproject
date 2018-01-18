@@ -62,7 +62,6 @@ def calc_dropout(engine):
         df (DataFrame): Table with columns for...
                         'nct_id': study ID (index)
                         'enrolled': actually study enrollment
-                        'dropped': number of participants that withdrew
                         'droprate': ratio of dropped to enrolled
 
     Note:
@@ -107,6 +106,9 @@ def calc_dropout(engine):
         df = startdf.join(dropdf, how='inner')
         df['droprate'] = df['dropped'] / df['enrolled']
 
+        # Lose the 'dropped' column (not useful)
+        df.drop(columns='dropped', inplace=True)
+
     return df
 
 
@@ -139,7 +141,7 @@ def calc_features(engine):
     if engine is not None:
         keepcols = [
             'nct_id', 'registered_in_calendar_year', 'actual_duration',
-            'number_of_facilities', 'has_us_facility', 'has_single_facility',
+            'number_of_facilities', 'has_us_facility',
             'minimum_age_num', 'minimum_age_unit',
             'maximum_age_num', 'maximum_age_unit']
         calcvals = pd.read_sql_table('calculated_values', engine,
@@ -179,15 +181,11 @@ def calc_features(engine):
             (365 * 24 * 60)  # convert from minutes
         calcvals['maximum_age_years'] = maximum_age_years
 
-        # Calculate age range
-        calcvals['age_range_years'] = \
-            calcvals['maximum_age_years'] - calcvals['minimum_age_years']
-
         # Select columns of interest (& rename some)
         keepcols = [
             'nct_id', 'registered_in_calendar_year', 'actual_duration',
-            'number_of_facilities', 'has_us_facility', 'has_single_facility',
-            'minimum_age_years', 'maximum_age_years', 'age_range_years']
+            'number_of_facilities', 'has_us_facility',
+            'minimum_age_years', 'maximum_age_years']
         renaming = {
             'registered_in_calendar_year': 'start_year',
             'actual_duration': 'duration',
@@ -233,45 +231,39 @@ def all_feature_plots(df, response_name='droprate', show=False, savedir=None):
         f (list): list of figure (handle, axes) tuples for the plots created
     """
 
-    # Which features to plot?
-    cont_features = ['start_year', 'duration', 'num_facilities',
-                     'minimum_age_years', 'maximum_age_years',
-                     'age_range_years', 'enrolled']
-    cat_features = ['has_us_facility', 'is_cancer', 'has_single_facility']
-
+    feature_names = df.columns[['droprate' not in c for c in df.columns]]
+    sns.set_style("ticks")
     f = []
-    sns.set_style("dark")
 
-    # Plot continuous features as scatter plots
-    for name in cont_features:
+    # Plot response vs features
+    for name in feature_names:
+        #  setup plot
         fig, ax = plt.subplots(figsize=(5,4))
-        sns.regplot(x=name, y=response_name, data=df)
-        ax.set(xlabel=name, ylabel=response_name)
-        fig.tight_layout()
-        f.append((fig, ax))
 
-        # save to file
-        if savedir is not None:
-            fig.savefig('{}/{} vs {}.png'.format(savedir, response_name, name))
+        # Plot data (infer categorical or continuous for box vs scatter plot)
+        if len(df[name].unique())<5:
+            # Box plot
+            sns.boxplot(x=name, y=response_name, data=df)
 
-    # Plot categorical features as box plots
-    for name in cat_features:
-        fig, ax = plt.subplots(figsize=(5,4))
-        sns.boxplot(x=name, y=response_name, data=df)
-        ax.set(xlabel=name, ylabel=response_name)
-        fig.tight_layout()
-        f.append((fig, ax))
-
-        # save to file
-        if savedir is not None:
-            fig.savefig('{}/{} vs {}.png'.format(savedir, response_name, name))
-
-    # Render plots, if requested
-    for tup in f:
-        if show:
-            tup[0].show()
         else:
-            plt.close(tup[0])
+            # Scatter plot
+            fig, ax = plt.subplots(figsize=(5,4))
+            sns.regplot(x=name, y=response_name, data=df,
+                        scatter_kws={'alpha':0.3, 's':3})
+
+        # Label plot
+        ax.set(xlabel=name, ylabel=response_name, ylim=(0.,1.))
+        fig.tight_layout()
+        f.append((fig, ax))
+
+        # save to file
+        if savedir is not None:
+            fig.savefig('{}/{} vs {}.png'.format(savedir, response_name, name))
+
+        if show:
+            fig.show()
+        else:
+            plt.close(fig)
 
     return f
 
@@ -305,6 +297,75 @@ def get_data(savename=None):
 
 
 # ===================== Functions regarding model/fitting
+def split_data(df, save_suffix=None, test_size=None):
+    """ Given data frame, split into training and text sets and save via pickle
+
+    Args:
+        df (DataFrame): pandas dataframe with data to split
+
+    Kwargs:
+        save_suffix (str): If not none save the training and testing data via 
+            pickle, and append this to the filename (e.g. 
+            'training_<save_suffix>.pkl' or 'testing_<save_suffix>.pkl'
+        test_size (float, int, or None): proportion of data to include in test 
+            set, see train_test_split() documentation for more
+    
+    Returns:
+        dfsplit (list): 2-element list with training and testing dataframes, 
+            respectively (as output by train_test_split)
+    """
+    dfsplit = train_test_split(df)
+
+    # Save training and testing data
+    if save_suffix is not None:
+        dfsplit[0].to_pickle('training_{}.pkl'.format(save_suffix))
+        dfsplit[1].to_pickle('testing_{}.pkl'.format(save_suffix))
+    
+    return dfsplit
+
+
+def fit_model(df, savename=None):
+    """ Given input dataframe, run statsmodel linearfit and return results
+
+    Args:
+        df (DataFrame): pandas dataframe with data to fit
+        savename (str): pickle filename for where to save the results object. If
+                        None, do not save
+
+    Returns:
+        res (statsmodels results): results of the fit
+    """
+
+    # Build formula for linear model (one linear term for each data column)
+    feature_names = df.columns[['droprate' not in c for c in df.columns]]
+    iscat = False
+    formula = ['droprate ~ ']
+    for name in feature_names:
+        formula.append('+')
+        
+        # Determine if categorical variable and add to formula accordingly
+        iscat = len(df[name].unique()) < 5
+        if iscat:
+            formula.append('C(')
+        formula.append(name)
+        if iscat:
+            formula.append(')')
+    formulastr = ''.join(formula)
+
+
+    # Setup model
+    model = smf.ols(formulastr, data=df)
+
+    # Fit model
+    res = model.fit()
+
+    # Save to pickle
+    if savename is not None:
+        res.save(savename)
+
+    return res
+
+
 def diagnotic_plots(res, show=False):
     """ Create diagnostic plots from regression results object (residuals)
     
@@ -346,19 +407,28 @@ def eval_preds(df, res): # IN PROGRESS
     """ Given test data and statsmodel linear model fit, caculate RMS error
     Args:
         df (DataFrame): pandas.DataFrame with data to predict
-        res (statsmodels results structure): Contains fitted model
+        res (statsmodels results structure): Contains fitted model results
     
     Returns:
-        rmse (): root mean square error between actual vs predicted dropout rate
+        Rsq (float): Coefficient of determination
     """
+
+    # Actual vs predicted
     actual = df['droprate'].to_frame(name='actual')
-
-    pred = (res.predict(df)**(1./0.3)).to_frame(name='predicted') # undo modification
-
+    pred = res.predict(df).to_frame(name='predicted')
     errordf = actual.join(pred)
+    errordf.dropna(inplace=True)
     errordf['resid'] = (errordf['actual']-errordf['predicted'])
 
-    return None
+    # Calculate Rsquared
+    y = errordf['actual']
+    yavg = y.mean()
+    yfit = errordf['predicted']
+    SStot = ((y-yavg)**2).sum()
+    SSres = ((y-yfit)**2).sum()  
+    Rsq = 1 - (SSres/SStot)
+
+    return Rsq
 
 
 # ===================== MAIN

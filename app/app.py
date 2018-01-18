@@ -9,7 +9,8 @@ import numpy as np
 
 # ================== Import data/model
 res = sm.load('../res.pkl')
-currdata = res.model.data.frame.iloc[1000]
+currdata = res.model.data.frame.iloc[1000:1001]
+pred = res.predict(currdata)
 
 #  =================  Dash app
 app = dash.Dash()
@@ -18,78 +19,93 @@ app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"
 
 app.layout = html.Div(children=[
 
-    html.H1(children='Hello Dash'),
-
-    html.Div(children='Dash: A web application framework for Python.'),
-
     html.Div(children=[
-        html.Label('What year will you start?'),
+        html.H1(
+            children="Let's Get Clinical!"),
+        html.H5(
+            children='Lena Bartell'),
+        html.H3(
+            children='Enter details about your trial:',
+            style={'text-align':'left'}),
+        ],
+        id='title_block',
+        style={'text-align':'center'}
+    ),
+    
+    html.Div(children=[
+        html.Label('1. What year will you start?'),
+        html.Div(
+            children=[],
+            id='report_start_year',
+            style={'text-align':'right'}),        
         dcc.Slider(
             min=1999,
             max=2020,
             step=1,
-            marks={i: '{}'.format(i) for i in range(2000, 2021, 5)},
-            value=2018,
-        )],
-        id='start_year_slider', 
+            marks={i: ' ' if i%5 else '{}'.format(i) for i in range(2000, 2021)},
+            value=currdata['start_year'][0],
+            id='start_year_slider')
+        ],
         style={'margin-top': 40, 'margin-bottom': 10}
     ),
 
     html.Div(children=[
-        html.Label('Is study addressing cancer?'),
+        html.Label('2. Does your study deal with any form of cancer?'),
         dcc.RadioItems(
-            id='selectcancer',
-            options=[
-                {'label': 'Yes', 'value': 'iscancer'},
-                {'label': 'No', 'value': 'notcancer'},
-            ],
-            value='iscancer'
-        )],
-        id='cancer_radio',
+            options=[{'label': 'Yes', 'value': True},
+                     {'label': 'No', 'value': False}],
+            value=currdata['is_cancer'][0],
+            id='is_cancer_radio')
+        ],
+        id='is_cancer',
         style={'margin-top': 40, 'margin-bottom': 10}
     ),
 
-    dcc.Graph(id='graph1'),
+    html.Div(children=[
+        html.H3(children=[],
+            id='pred_report'),
+        html.Ul(children=[
+            html.Li('The most influential factor is....', id='pred_bullet_1')
+            ])
+        ],
+        style={'margin-top': 40, 'margin-bottom': 10}
+    )
+
 ],
-style={'align':'center', 'width':'50%', 'margin':'auto'})
+style={'align':'center', 'width':'50%', 'margin':'auto'}
+)
 
 
+# If start_year_slider changes, udpdate report_start_year
 @app.callback(
-    Output(component_id='graph1', component_property='figure'),
-    [Input(component_id='selectcancer', component_property='value')])
+    Output('report_start_year', 'children'),
+    [Input('start_year_slider', 'value')]
+    )
 
-def update_figure(selected_cancer):
+def update_start_year_report(input_value):
+    return 'Selected: {}'.format(input_value)
 
-    iscancer = selected_cancer=='iscancer'
 
-    filtered_df = df[df['is_cancer']==iscancer]
+# If any parameters change, update the prediction
+@app.callback(
+    Output(component_id='pred_report', component_property='children'),
+    [Input('start_year_slider', 'value'),
+     Input('is_cancer_radio', 'value')])
+
+def update_prediction(start_year, 
+                      is_cancer,
+                      currdata=currdata):
+    # set features
+    currdata['start_year'] = start_year
+    currdata['is_cancer'] = is_cancer
     
-    name = 'cancer' if iscancer else 'not cancer'
+    # update prediction
+    pred = res.predict(currdata)
 
-    traces =  [go.Scatter(
-                    x=filtered_df['duration'],
-                    y=filtered_df['droprate']*100,
-                    mode='markers',
-                    text=df['nct_id'],
-                    opacity=0.7,
-                    marker={
-                        'size': 5,
-                        'line': {'width': 0.5, 'color': 'white'}
-                    },
-                    name=name,
-                )]
+    # Predition report string
+    pred_str = 'Your predicted drop out rate is: {:d}%'.format(int(np.round(pred[0]*100)))
 
-
-    return {
-        'data': traces,
-        'layout': go.Layout(
-            xaxis={'title': 'Study duration (months)'},
-            yaxis={'title': 'Dropout rate (fraction)'},
-            margin={'l': 40, 'b': 40, 't': 10, 'r': 100},
-            legend={'x': 0, 'y': 1},
-            hovermode='closest'
-        )
-    }
+    return pred_str
 
 
 if __name__ == '__main__':

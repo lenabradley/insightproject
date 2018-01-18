@@ -1,31 +1,26 @@
 import demo
 import pandas as pd
-import statsmodels.formula.api as smf
 
 # ============ GATHER DATA
-# Load previously-saved ata
 df = pd.read_pickle('training_data.pkl')
 
 
 # ============= FIT MODEL
+res = demo.fit_model(df)
 
-# Fit linear model via statsmodels
-df['droprate_mod'] = df['droprate']**(0.3)
-formula = ('droprate_mod ~ ' +
-           'duration*C(has_us_facility)*C(is_cancer)'+
-           '- duration:C(has_us_facility):C(is_cancer)')
-model = smf.ols(formula, data=df)
-res = model.fit()
-
-# Print model results
+# Show results
 print(res.summary())
-
-# Check residuals for normality, homogeneity
-for x in demo.diagnotic_plots(res):
-    x.show()
+demo.diagnotic_plots(res, show=True)
 
 # Save linear model results via pickle (data included)
 res.save('training_res.pkl', remove_data=False)
+
+
+
+
+
+
+
 
 # ============= EVALUATE MODEL
 
@@ -33,7 +28,7 @@ res.save('training_res.pkl', remove_data=False)
 dftest = pd.read_pickle('testing_data.pkl')
 
 
-
+# sklearn getdummies
 
 
 # Get predicted values & confidence intervals

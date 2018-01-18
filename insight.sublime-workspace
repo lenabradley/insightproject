@@ -4,6 +4,34 @@
 		"selected_items":
 		[
 			[
+				"inpu",
+				"input_value"
+			],
+			[
+				"start",
+				"start_year"
+			],
+			[
+				"app",
+				"append_css\tfunction"
+			],
+			[
+				"ti",
+				"tight_layout"
+			],
+			[
+				"respon",
+				"response_name"
+			],
+			[
+				"enro",
+				"enrolled"
+			],
+			[
+				"max",
+				"maximum_age_years"
+			],
+			[
 				"response",
 				"response_name\tparam"
 			],
@@ -124,10 +152,6 @@
 				"parse_args"
 			],
 			[
-				"max",
-				"maximum_age_unit"
-			],
-			[
 				"set",
 				"set_index"
 			],
@@ -224,10 +248,6 @@
 				"enrolled"
 			],
 			[
-				"enro",
-				"enrollment"
-			],
-			[
 				"stud",
 				"study_type"
 			],
@@ -260,13 +280,10 @@
 	"buffers":
 	[
 		{
-			"contents": "#!/usr/bin/python\nimport argparse\nimport psycopg2\nfrom config import config\nfrom sqlalchemy import create_engine\n# from sqlalchemy_utils import database_exists, create_database\n# import psycopg2\nimport pandas as pd\nfrom matplotlib import pyplot as plt\nimport numpy as np\n# from sklearn import datasets, linear_model\nfrom sklearn.model_selection import train_test_split\nimport seaborn as sns\nimport statsmodels.formula.api as smf\nfrom statsmodels.sandbox.regression.predstd import wls_prediction_std\n\n# Input parser\nparser = argparse.ArgumentParser(\n    description='Analyze clinical trial dropout rates.')\nparser.add_argument('--getdata', dest='getdata', action='store_const',\n                    const=True, default=False,\n                    help='Gather data of interest (default: do not get data)')\nparser.add_argument('--savedata', dest='savedata', action='store_const', \n                    const=True, default=False,\n                    help='Save dataframe (default: do not save data)')\nparser.add_argument('--loaddata', dest='loaddata', action='store', default=None,\n                    help='Load dataframe from given filename (default: None, do not load data)')\nparser.add_argument('--plot', dest='plot', action='store_const',\n                    const=True, default=False,\n                    help='Create various plots (default: do not plot stuff)')\nparser.add_argument('--fit', dest='fit', action='store_const',\n                    const=True, default=False,\n                    help='Fit linear model (default: do not fit model)')\n\n# Custom settings\n# pd.set_option('display.width', 150)\nsns.set(style=\"white\", color_codes='default', context='talk')\n\n\ndef connectdb():\n    \"\"\" Open and return SQLAlchemy engine to PostgreSQL database \"\"\"\n\n    # read connection parameters\n    params = config()\n\n    # connect to the PostgreSQL server\n    engine = create_engine('postgresql://%s:%s@%s/%s' %\n                           (params['user'], params['password'],\n                            params['host'], params['database']))\n\n    return engine\n\n\ndef calc_dropout(engine):\n    \"\"\" Given database connection, calculate enrollment & drop out totals, rate\n\n    Args:\n        engine (engine): Connection to AACT database (sqlalchemy engine\n            connnection to postgresql database)\n\n    Return:\n        df (DataFrame): Table with columns for...\n                        'nct_id': study ID (index)\n                        'enrolled': actually study enrollment\n                        'dropped': number of participants that withdrew\n                        'droprate': ratio of dropped to enrolled\n\n    Note:\n    - Various filtering has been implemented on both the dropout and overall \n        study data, to ex/include in/valid data entries. See code for details\n    - Use 'nct_id' as indexing column\n    \"\"\"\n    df = None\n    if engine is not None:\n\n        # Calculate number of participants dropped from each study\n        keepcols = ['count']\n        renaming = {'count': 'dropped'}\n        drops = pd.read_sql_table('drop_withdrawals', engine)  # withdrawl table\n        filt = (\n            # only look at 'Overall Study' period\n            drops['period'].isin(['Overall Study']) &\n            ~drops['reason'].isin(['Study Ongoing'])  # invalid dropout reason\n        )\n        dropdf = drops[filt].groupby('nct_id').sum(\n        )[keepcols]  # accumulate total dropped\n        dropdf.rename(columns=renaming, inplace=True)\n\n        # Collect total number of participants actually enrolled in study\n        keepcols = ['nct_id', 'enrollment']\n        renaming = {'enrollment': 'enrolled'}\n        studies = pd.read_sql_table('studies', engine)\n        filt = (\n            # Interventional studies only\n            studies['study_type'].isin(['Interventional']) &\n            # Actually enrollment numbers only\n            studies['enrollment_type'].isin(['Actual']) &\n            studies['overall_status'].isin(\n                ['Completed'])  # Study has completed\n        )\n        startdf = studies[filt][keepcols]\n        startdf.set_index('nct_id', inplace=True)\n        startdf.rename(columns=renaming, inplace=True)\n        startdf['enrolled'] = startdf['enrolled'].astype('int64')\n\n        # Combine the tables & calculate dropout rate\n        df = startdf.join(dropdf, how='inner')\n        df['droprate'] = df['dropped'] / df['enrolled']\n\n    return df\n\n\ndef remove_drops(df, thresh=1.0):\n    \"\"\" Return dataframe with entries above a given threshold of droprate\n    removed\n    \"\"\"\n    return df[df['droprate'] < thresh]\n\n\ndef calc_features(engine):\n    \"\"\" Given database connection, gather various study features\n\n    Args:\n        engine (engine): Connection to AACT database (sqlalchemy engine \n            connnection to postgresql database)\n\n    Return:\n        df (DataFrame): Table with columns for various features, including\n            'nct_id' (study ID) as the index\n\n    Note:\n    - Use 'nct_id' as indexing column\n    \"\"\"\n\n    df = pd.DataFrame()\n\n    # ============== Data from AACT Calculated_Values table (1)\n    # Table of AACT calculated values\n    if engine is not None:\n        keepcols = [\n            'nct_id', 'registered_in_calendar_year', 'actual_duration',\n            'number_of_facilities', 'has_us_facility', 'has_single_facility',\n            'minimum_age_num', 'minimum_age_unit',\n            'maximum_age_num', 'maximum_age_unit']\n        calcvals = pd.read_sql_table('calculated_values', engine,\n                                     columns=keepcols)\n\n        # Calculate min age in years\n        minimum_age_years = calcvals['minimum_age_num'].copy()\n        notnull = calcvals['minimum_age_unit'].notnull()\n        filt = notnull & calcvals['minimum_age_unit'].str.contains('Month')\n        minimum_age_years[filt] = minimum_age_years[filt] / \\\n            12  # convert from months\n        filt = notnull & calcvals['minimum_age_unit'].str.contains('Weeks')\n        minimum_age_years[filt] = minimum_age_years[filt] / \\\n            52  # convert from weeks\n        filt = notnull & calcvals['minimum_age_unit'].str.contains('Days')\n        minimum_age_years[filt] = minimum_age_years[filt] / \\\n            365  # convert from days\n        calcvals['minimum_age_years'] = minimum_age_years\n\n        # Calculate max age in years\n        maximum_age_years = calcvals['maximum_age_num'].copy()\n        notnull = calcvals['maximum_age_unit'].notnull()\n        filt = notnull & calcvals['maximum_age_unit'].str.contains('Month')\n        maximum_age_years[filt] = maximum_age_years[filt] / \\\n            12  # convert from months\n        filt = notnull & calcvals['maximum_age_unit'].str.contains('Weeks')\n        maximum_age_years[filt] = maximum_age_years[filt] / \\\n            52  # convert from weeks\n        filt = notnull & calcvals['maximum_age_unit'].str.contains('Days')\n        maximum_age_years[filt] = maximum_age_years[filt] / \\\n            365  # convert from days\n        filt = notnull & calcvals['maximum_age_unit'].str.contains('Hour')\n        maximum_age_years[filt] = maximum_age_years[filt] / \\\n            (365 * 24)  # convert from hours\n        filt = notnull & calcvals['maximum_age_unit'].str.contains('Minute')\n        maximum_age_years[filt] = maximum_age_years[filt] / \\\n            (365 * 24 * 60)  # convert from minutes\n        calcvals['maximum_age_years'] = maximum_age_years\n\n        # Calculate age range\n        calcvals['age_range_years'] = \\\n            calcvals['maximum_age_years'] - calcvals['minimum_age_years']\n\n        # Select columns of interest (& rename some)\n        keepcols = [\n            'nct_id', 'registered_in_calendar_year', 'actual_duration',\n            'number_of_facilities', 'has_us_facility', 'has_single_facility',\n            'minimum_age_years', 'maximum_age_years', 'age_range_years']\n        renaming = {\n            'registered_in_calendar_year': 'start_year',\n            'actual_duration': 'duration',\n            'number_of_facilities': 'num_facilities'}\n        df1 = calcvals[keepcols].copy().rename(columns=renaming)\n\n        # Overwrite existing data\n        df1.set_index('nct_id', inplace=True)\n        df = df1\n\n    # ============== Data from AACT Conditions table (2)\n    if engine is not None:\n        # Table of AACT-determined conditions\n        conditions = pd.read_sql_table('conditions', engine,\n                                       columns=['nct_id', 'downcase_name'])\n\n        # Does this condition include the word 'cancer'?\n        conditions['is_cancer'] = conditions['downcase_name'].str.contains(\n            '|'.join(('cancer', '[a-z]+oma', 'leukemia', 'tumor')))\n\n        # Collect to the study level\n        df2 = conditions[['nct_id', 'is_cancer']].groupby('nct_id').any()\n\n        # Merge with existing data\n        df = df.join(df2, how='inner')\n\n    return df\n\n\ndef all_feature_plots(df, response_name='droprate', show=False):\n    \"\"\" Given data table, plot the response against each feature\n\n    Args:\n        df (DataFrame): pandas dataframe with data to plot\n        response_name (str): string specifying the column to use as response \n                             variable\n        show (bool): If true, use matplotlib.pyplot.show to render each plot\n    Returns:\n        fig (list): list of figure handle, axes tuples for the plots created\n    \"\"\"\n\n    f = []\n\n    # start_year\n    f.append(plt.subplots(figsize=(5,4)))\n    sns.regplot(x='start_year', y=response_name, data=df)\n    if show:\n        plt.show()\n\ndef diagnotic_plots(res, show=False):\n    \"\"\" Create diagnostic plots from regression results object (residuals)\n    \n    Args:\n        res (statsmodels.regression.linear_model.RegressionResultsWrapper):\n            Results of fitting linear regression model\n\n    Kwargs:\n        show (bool): If true, call the matplotlib.pyplot.show on each figure\n                     before exiting (default: False)\n\n    Return:\n        fig (tuple of matplotlib.figure.Figure): figure handles to...\n            fig[0]  Historam  of fit residuals (check normality)\n            fig[1]  Plot of predicted values vs residuals (check homogeneity)\n    \"\"\"\n\n    # Histogram of residuals\n    f1, ax1 = plt.figure(figsize=(5,4)), plt.axes()\n    sns.distplot(res.resid, bins=50, kde=False)\n    sns.despine(left=True)\n    ax1.set(yticks=[], xlabel='droprate_tform residual')\n    f1.tight_layout()\n\n    # Plot residual vs predicted (homogeneous)\n    f2, ax2 = plt.figure(figsize=(5,4)), plt.axes()\n    plt.plot(res.predict(), res.resid.values, '.')\n    ax2.set(xlabel='predicted', ylabel='residual')\n    f2.tight_layout()\n\n    if show:\n        f1.show()\n        f2.show()\n\n    return (f1, f2)\n\n\ndef get_data(savename=None):\n    \"\"\" Connect to AACT database and gather data/featuresof interest\n    \n    Kwargs:\n        savename (string): If not None, save the resulting DataFrame with\n                           data to this file name using pickle\n    \n    Return:\n        df (DataFrame): Pandas DataFrame with data features and responses\n    \"\"\"\n\n    # establish connection to trials database\n    engine = connectdb()\n\n    # Collect data\n    df = calc_features(engine).join(calc_dropout(engine), how='inner')\n\n    # Remove high drop rates\n    df = remove_drops(df)\n\n    # Save\n    if savename is not None:\n        df.to_pickle(savename)\n\n    # Return\n    return df\n\n\ndef eval_preds(df, res):\n    \"\"\" Given test data and statsmodel linear model fit, caculate RMS error\n    Args:\n        df (DataFrame): pandas.DataFrame with data to predict\n        res (statsmodels results structure): Contains fitted model\n    \n    Returns:\n        rmse (): root mean square error between actual vs predicted dropout rate\n    \"\"\"\n    actual = df['droprate'].to_frame(name='actual')\n\n    pred = (res.predict(df)**(1./0.3)).to_frame(name='predicted') # undo modification\n\n    errordf = actual.join(pred)\n    errordf['diff'] = (errordf['actual']-errordf['predicted'])\n\n\n\n\nif __name__ == \"__main__\":\n    # Gather command line options\n    args = parser.parse_args()\n\n    # Get data\n    df = None\n    if args.loaddata is not None:\n        # Load existing data (first choice)\n        df = pd.read_pickle(args.loaddata)       \n\n    elif args.getdata:\n        # Save this new data?\n        savename = None\n        if args.savedata:\n            savename='data.pkl'\n\n        #  Gather new data\n        df = get_data(savename=None)\n\n        # Split out test/training data\n        dfsplit = train_test_split(df)\n\n        # Save training and testing data\n        dfsplit[0].to_pickle('training_data.pkl')\n        dfsplit[1].to_pickle('testing_data.pkl')\n\n    # Plot stuff\n    if args.plot and df is not None:\n\n        # Number of study participants histogram\n        f, ax = plt.subplots(figsize=(5, 4))\n        sns.distplot(df['enrolled'],\n                     bins=np.linspace(0, 1000, num=100),\n                     kde=False)\n        sns.despine(left=True)\n        ax.set(yticks=[], xlabel='Participants enrolled')\n        f.tight_layout()\n        f.show()\n\n        # Dropout rate +/- modification\n        f, ax = plt.subplots(figsize=(5, 4))\n        kwargs = {'bins': np.linspace(0, 1.1, 110), 'kde': False,\n                  'norm_hist': True}\n        sns.distplot(df['droprate'], **kwargs, label='raw')\n        sns.distplot(df['droprate_tform'], **kwargs, label='transformed')\n        sns.despine(left=True)\n        ax.set(yticks=[], xlabel='dropout rate (fraction)')\n        ax.legend()\n        f.tight_layout()\n        f.show()\n\n        # Dropout rate +/- cancer\n        f, ax = plt.subplots(figsize=(5, 4))\n        kwargs = {'bins': np.linspace(0, 1.1, 50),\n                  'kde': False, 'norm_hist': True}\n        sns.distplot(df[df['is_cancer'].notnull() & df['is_cancer'] == True]['droprate_tform'],\n                     **kwargs, label='cancer')\n        sns.distplot(df[df['is_cancer'].notnull() & df['is_cancer'] == False]['droprate_tform'],\n                     **kwargs, label='not cancer')\n        sns.despine(left=True)\n        ax.set(yticks=[], xlabel='dropout rate (fraction, transformed)')\n        ax.legend()\n        f.tight_layout()\n        f.show()\n\n        # Study duration histogram\n        f, ax = plt.subplots(figsize=(5, 4))\n        sns.distplot(df[df['duration'].notnull()]['duration'],\n                     bins=np.linspace(0, 200, 50), kde=False)\n        sns.despine(left=True)\n        ax.set(yticks=[], xlabel='Study duration (months)')\n        f.tight_layout()\n        f.show()\n\n    # Fit linear model\n    if args.fit and df is not None:\n        # Implement linear model (via statsmodels)\n        formula = ('droprate**(1/2) ~ ' +\n                   'duration*C(has_us_facility)*C(is_cancer)')\n        model = smf.ols(formula, data=df)\n        res = model.fit()\n        print(res.summary())\n\n        # Check residuals for normality, homogeneity\n        for x in diagnotic_plots(res):\n            x.show()\n\n        # Get predicted values & confidence intervals\n        predstd, interval_l, interval_u = wls_prediction_std(res)\n\n        # - Gather subset of data of interest\n        interval_l_df = interval_l.to_frame(name='lower')\n        interval_u_df = interval_u.to_frame(name='upper')\n        intervals = interval_l_df.join(interval_u_df)\n        model_data = df[['duration','droprate_tform','is_cancer']].\\\n            join(intervals, how='inner')\n        model_data['pred_droprate'] = res.predict()\n        model_data = model_data.sort_values('duration')\n\n        # - Plot predicted value / CIs\n        x = model_data['duration']\n        y = model_data['droprate_tform']\n        ypred = model_data['pred_droprate']\n        ypred_l = model_data['lower']\n        ypred_u = model_data['upper']\n\n        f, ax = plt.subplots(ncols=2, figsize=(10,4))\n        for cval in [False, True]:\n            filt = model_data['is_cancer']==cval\n            x = model_data[filt]['duration']\n            y = model_data[filt]['droprate_tform']\n            yp = model_data[filt]['pred_droprate']\n            yl = model_data[filt]['lower']\n            yu = model_data[filt]['upper'] \n            ax[int(cval)].scatter(x, y, marker='o', alpha=0.75)\n            ax[int(cval)].plot(x, yp, '-', color='k')\n            ax[int(cval)].fill_between(x, yl, yu, alpha=0.25, label='95%CI')\n            ax[int(cval)].set(title='is_cancer {}'.format(cval),\n                              xlabel='study duration',\n                              ylabel='droprate_tform')\n            ax[int(cval)].legend()\n        f.show()\n",
 			"file": "demo.py",
-			"file_size": 16419,
-			"file_write_time": 131606920197794540,
 			"settings":
 			{
-				"buffer_size": 16451,
+				"buffer_size": 18059,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -284,7 +301,7 @@
 			"file": "app/app.py",
 			"settings":
 			{
-				"buffer_size": 2629,
+				"buffer_size": 2063,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -352,7 +369,7 @@
 	],
 	"find":
 	{
-		"height": 42.0
+		"height": 41.0
 	},
 	"find_in_files":
 	{
@@ -389,7 +406,7 @@
 	"groups":
 	[
 		{
-			"selected": 0,
+			"selected": 2,
 			"sheets":
 			[
 				{
@@ -398,15 +415,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 16451,
+						"buffer_size": 18059,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								9476,
-								9316
+								2102,
+								2102
 							]
 						],
 						"settings":
@@ -416,6 +433,10 @@
 								{
 									"characters": "<",
 									"selector": "text.html"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -439,10 +460,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 660.0,
+						"translation.y": 228.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
@@ -458,8 +479,8 @@
 						"selection":
 						[
 							[
-								230,
-								230
+								31,
+								12
 							]
 						],
 						"settings":
@@ -481,7 +502,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 2,
 					"type": "text"
 				},
 				{
@@ -490,15 +511,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2629,
+						"buffer_size": 2063,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								2629,
-								2629
+								1230,
+								1230
 							]
 						],
 						"settings":
@@ -516,6 +537,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								}
 							],
 							"syntax": "Packages/Python/Python.sublime-syntax",
@@ -523,10 +548,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 1260.0,
+						"translation.y": 600.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 0,
 					"type": "text"
 				}
 			]
