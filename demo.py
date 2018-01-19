@@ -384,17 +384,21 @@ def diagnotic_plots(res, show=False):
     """
 
     # Histogram of residuals
-    f1, ax1 = plt.figure(figsize=(5,4)), plt.axes()
+    f1, ax1 = plt.figure(figsize=(6,3)), plt.axes()
     sns.distplot(res.resid, bins=50, kde=False)
     sns.despine(left=True)
-    ax1.set(yticks=[], xlabel='droprate_tform residual')
+    ax1.set(yticks=[], xlabel='residual')
+    ax1.set()
     f1.tight_layout()
 
     # Plot residual vs predicted (homogeneous)
-    f2, ax2 = plt.figure(figsize=(5,4)), plt.axes()
-    plt.plot(res.predict(), res.resid.values, '.')
+    sns.set_style("white") 
+    f2, ax2 = plt.figure(figsize=(6,3)), plt.axes()
+
+    plt.plot(res.predict(), res.resid.values, '.', ms=5, alpha=0.5)
     ax2.set(xlabel='predicted', ylabel='residual')
     f2.tight_layout()
+    sns.despine()
 
     if show:
         f1.show()

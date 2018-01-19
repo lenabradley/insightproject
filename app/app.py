@@ -31,17 +31,23 @@ app.layout = html.Div(children=[
     # =============================== Title (10 cols)
     html.Div(children=[
         html.Img(
-            src='https://i.guim.co.uk/img/media/764988213a8826f8d1ee61c70086aad99915e198/60_0_501_590/master/501.jpg?w=300&q=55&auto=format&usm=12&fit=max&s=12bdb1dac6375cd940d661ade2a94042',
-            style={'height':'200px'}),
+            src='https://images.unsplash.com/photo-1486825586573-7131f7991bdd?dpr=1&auto=format&fit=crop&w=1000&q=80&cs=tinysrgb', #'https://i.guim.co.uk/img/media/764988213a8826f8d1ee61c70086aad99915e198/60_0_501_590/master/501.jpg?w=300&q=55&auto=format&usm=12&fit=max&s=12bdb1dac6375cd940d661ade2a94042',
+            style={'height':'250px'}),
         html.H1(
             children="Let's Get Clinical!"),
+        html.H5(
+            children='Predicting clinical trial dropout rates',
+            style={'font-style':'italic'}),
         html.H5(
             children='Lena Bartell')
         ],
         id='title_block',
         style={'text-align': 'center'},
-        className='ten columns'
+        className='twelve columns'
     ),
+
+
+
 
     # =============================== User set parameters (5 cols)
     html.Div(children=[
@@ -101,7 +107,7 @@ app.layout = html.Div(children=[
             ])
         ],
         className='five columns',
-        style={'background-color':'#EE7365','padding':'10px'}
+        style={'background-color':'#F89BA7','padding':'10px'}
     ),
 
     # =============================== Plot something cool (12 cols)

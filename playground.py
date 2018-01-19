@@ -1,5 +1,7 @@
 import demo
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # ============ GATHER DATA
 df = pd.read_pickle('training_data.pkl')
@@ -18,9 +20,46 @@ res.save('training_res.pkl', remove_data=False)
 
 
 
+# =============  FIGURES FOR WEEK2 DEMO
+# Histogram of dropout rate
+fig, ax = plt.subplots(figsize=(6,3))
+filt = df['is_cancer']==False
+sns.distplot(df[filt]['droprate'], bins=50, kde=False, label='not cancer', norm_hist=True)
+ax.set(yticks=[], xlabel='dropout rate (fraction)')
+fig.tight_layout()
+sns.despine(left=True)
+fig.show()
 
+# Dropout rate +/- cancer
+fig, ax = plt.subplots(figsize=(6,3))
+filt = df['is_cancer']==False
+sns.distplot(df[filt]['droprate'], bins=50, kde=False, label='not cancer', norm_hist=True)
+filt = df['is_cancer']==True
+sns.distplot(df[filt]['droprate'], bins=50, kde=False, label='cancer', norm_hist=True)
+ax.set(yticks=[], xlabel='dropout rate (fraction)')
+fig.tight_layout()
+sns.despine(left=True)
+plt.legend()
+fig.show()
 
+# Dropout rate vs study duration
+sns.set_style("white")  
+fig, ax = plt.subplots(figsize=(6,3))
+sns.regplot(x='duration', y='droprate', data=df, scatter_kws={'s':2, 'alpha':0.5}, fit_reg=False)
+ax.set(xlabel='study duration (months)', ylabel='dropout rate (fraction)',
+       xlim=(0,150), yticks=[0,1])
+fig.tight_layout()
+sns.despine()
+fig.show()
 
+# log plot?
+fig, ax = plt.subplots(figsize=(6,3))
+plt.semilogx(df['duration'], df['droprate'], '.', alpha=0.1)
+ax.set(xlabel='study duration (months)', ylabel='dropout rate (fraction)',
+       xlim=(0,150), yticks=[0,1])
+fig.tight_layout()
+sns.despine()
+fig.show()
 
 # ============= EVALUATE MODEL
 
