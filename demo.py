@@ -366,8 +366,8 @@ def get_data(savename=None):
     return df
 
 
-def get_all_tables(engine):
-    """ Given database connection, import and join all AACT tables
+def get_all_tables():
+    """ Connect to AACT database, join select data, and return as a dataframe
 
     Args:
         engine (engine): Connection to AACT database (sqlalchemy engine
@@ -376,13 +376,15 @@ def get_all_tables(engine):
     Return:
         dfs (list of DataFrame): List where each element is an AACT table
     """
+
+
     table_names = [
         # 'baseline_counts',              # x
-        # 'baseline_measurements',        # ~ male/female
+        'baseline_measurements',        # Y male/female [category, param_value_num]
         # 'brief_summaries',              # ~ long text description
         'browse_conditions',            # Y mesh terms of disease (3700) -> heirarchy, ID --> Get this!
         'browse_interventions',         # Y mesh terms of treatment (~3000)
-        'calculated_values',            # Y (duration, num facilities, etc)
+        'calculated_values',            # Y [number_of_facilities, registered_in_calendar_year, registered_in_calendar_year, registered_in_calendar_year, min age, max age]
         # 'conditions',                   # x condition name
         'countries',                    # Y Country name
         # 'design_group_interventions',   # x
@@ -390,42 +392,48 @@ def get_all_tables(engine):
         # 'design_outcomes',              # x
         # 'designs',                      # x~ subject/caregiver/investigator blinded?
         # 'detailed_descriptions',        # x 
-        'drop_withdrawals',             # Y
+        # 'drop_withdrawals',             # Y --> already in response
         'eligibilities',                # Y (genders)
         # 'facilities',                   # x
         # 'intervention_other_names',     # x
         'interventions',                # Y intervetion_type (11)
         'keywords',                     # Y downcase_name (160,000!)
-        'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count
+        # 'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count --> already in response
         # 'outcomes',                     # x
         # 'participant_flows',            # x
         # 'reported_events',              # x
         # 'result_groups',                # x
-        'studies'                       # Y study_type, overall_status (COMPLETED), phase (parse for 1/2/3)
-        ]
+        'studies'                       # Y [study_type, overall_status (filt), phase (parse), number_of_arms, number_of_groups, has_dmc, is_fda_regulated_drug, is_fda_regulated_device, is_unapproved_device]
+    ]
 
-    table_cols = {
-        'browse_conditions': {'nct_id':'nct_id',
-                              'downcase_mesh_term':'condition_mesh'},
-        'browse_interventions': {'nct_id':'nct_id',
-                                 'downcase_mesh_term':'intervention_mesh'},
-        'calculated_values': {'nct_id':'nct_id',
-                              'number_of_facilities':'number_of_facilities',
-                              'actual_duration':'actual_duration',
-                              'actual_duration':'actual_duration'},
-        'countries': {'nct_id':'nct_id',
-                      'name': 'country'}}
-    
-    dfs = []
-    if engine is not None:
+    # Connect to database
+    engine = _connectdb_()
 
-        for name in table_names:
-            print('getting {}'.format(name))
-            dfs.append(pd.read_sql_table(name, engine))
+    # ================ Gather fe/male counts from 'baseline_measurements'
+    colnames = {'nct_id': 'nct_id',
+                'category': 'category',
+                'classification': 'classification',
+                'param_value_num': 'count'}
+    meas = pd.read_sql_table('baseline_measurements', engine,
+                             columns=colnames.keys()).rename(columns=colnames)
+    meas.set_index('nct_id', inplace=True)
 
+    # Determine if these particpant group counts are for fe/male
+    sexes = ['male', 'female']
+    for s in sexes:
+        filt = (meas['category'].str.lower().str.match(s) |
+                meas['classification'].str.lower().str.match(s))
+        meas[s] = np.NaN
+        meas.loc[filt, s] = meas[filt]['count']
 
-    return dfs
+    # Group/sum by study id, forcing those with no info back to nans
+    noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
+    meas = meas[sexes].groupby('nct_id').sum()
+    meas.loc[noinfo, sexes] = np.NaN
+    # ================ 
 
+    print('THIS FUNCTION IS NOT COMPLETE!!!')
+    return None
 
 
 
