@@ -10,7 +10,7 @@ import numpy as np
 import base64
 
 # ================== Import data/model
-res = sm.load('../res.pkl')
+res = sm.load('../training_res.pkl')
 currdata = res.model.data.frame.iloc[1000:1001]
 pred = res.get_prediction(currdata)
 
@@ -18,9 +18,6 @@ pred = res.get_prediction(currdata)
 factor_mostsig = res.pvalues.drop('Intercept').idxmin()
 factor_biggest = res.params.drop('Intercept').idxmax()
 
-# ================= Encode image
-image_filename = '/home/lena/Insight/project/reports/LoCole_Guardian.jpg'
-encoded_image = base64.b64encode(open(image_filename, 'rb').read())
 
 #  =================  Dash app
 app = dash.Dash()
@@ -29,7 +26,7 @@ app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/bWLwgP.css"
 
 app.layout = html.Div(children=[
 
-    # =============================== Title (10 cols)
+    # ==== Title (10 cols)
     html.Div(children=[
         # html.Img(
         #     src='https://images.unsplash.com/photo-1486825586573-7131f7991bdd?dpr=1&auto=format&fit=crop&w=1000&q=80&cs=tinysrgb', #'https://i.guim.co.uk/img/media/764988213a8826f8d1ee61c70086aad99915e198/60_0_501_590/master/501.jpg?w=300&q=55&auto=format&usm=12&fit=max&s=12bdb1dac6375cd940d661ade2a94042',
@@ -45,7 +42,7 @@ app.layout = html.Div(children=[
         className='twelve columns'
     ),
 
-    # =============================== User set parameters (5 cols)
+    # ==== User set parameters (5 cols)
     html.Div(children=[
 
         html.H3('Enter details about your trial:'
@@ -138,14 +135,14 @@ app.layout = html.Div(children=[
                 id='is_cancer_radio')
             ],
             id='is_cancer',
-            style={'margin-top': 30, 'margin-bottom': 10}
+            style={'margin-top': 10, 'margin-bottom': 10}
         )
 
         ],
         className='five columns'
     ),
 
-    # =============================== Report dropout rate prediction (5 cols)
+    # ==== Report dropout rate prediction (5 cols)
     html.Div(children=[
         html.H3('Your predictions:')
         ],
@@ -171,7 +168,7 @@ app.layout = html.Div(children=[
         style={'background-color':'#F89BA7', 'padding':'10px'}
     ),
     
-    # =============================== Plot something cool (12 cols)
+    # ==== Plot something cool (12 cols)
 ],
 style={'margins':'auto'}
 )

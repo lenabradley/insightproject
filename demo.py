@@ -37,7 +37,7 @@ parser.add_argument('--fit', dest='fit', action='store_const',
 sns.set(style="white", color_codes='default', context='talk')
 
 # ===================== Functions to gather data
-def connectdb():
+def _connectdb_():
     """ Open and return SQLAlchemy engine to PostgreSQL database """
 
     # read connection parameters
@@ -49,6 +49,77 @@ def connectdb():
                             params['host'], params['database']))
 
     return engine
+
+
+def gather_response():
+    """ Connect to AACT postgres database and collect response variables (number
+    of participants enrolled and dropped), with some consistency checks
+
+    Returns:
+        df (DataFrame): Pandas dataframe with columns for study ID ('nct_id'), 
+                        number of participants enrolled ('enrolled') at the 
+                        start, and the number that dropped out ('dropped')
+
+    Notes:
+    - Only keep studies with valid (non-nan) data
+    - Only keep studies where all of the following are true:
+        a. the total number of participants dropped equals the number 'NOT
+           COMPLETED' 
+        b. the number of participants 'STARTED' equals the number 'COMPLETED'
+           plus the number 'NOT COMPLETED'
+        c. the number of participants 'STARTED' equals the number 'enrolled'
+    """
+
+    # Connect to AACT database
+    engine = demo._connectdb_()
+
+
+    # Gather enrollment/dropout numbers - PART 1a
+    #   Gather dropout info from the 'drop_withdrawals' table by summing
+    #   the total count of people that dropped out within each study
+    colnames = {'nct_id': 'nct_id', 
+                'count':'dropped'}
+    df = pd.read_sql_table('drop_withdrawals', engine,
+                           columns=colnames.keys()
+                           ).groupby('nct_id').sum().rename(columns=colnames)
+
+    # Gather enrollment/dropout numbers - PART 1b
+    #   Gather enrollment numbers (actual, not anticipated) from 'studies' table
+    #   and append to existing dataframe
+    colnames = {'nct_id':'nct_id', 
+                'enrollment':'enrolled', 
+                'enrollment_type': 'enrollment_type'}
+    studies = pd.read_sql_table('studies', engine, 
+                                columns=colnames.keys()
+                                ).set_index('nct_id').rename(columns=colnames)
+    filt = [x=='Actual' for x in studies['enrollment_type']]
+    df = df.join(studies[filt][['enrolled']].astype(int), how='inner')
+    df.dropna(how='any', inplace=True)
+
+    # Gather enrollment/dropout numbers - PART 2
+    #   Gather enrollment and dropout numbers from the 'milestones' table, only
+    #   looking at the COMPLTED/STARTED/NOT COMPLETED counts, and append to 
+    #   existing dataframe
+    colnames = {'nct_id': 'nct_id', 
+                'title': 'milestone_title', 
+                'count':'milestone_count'}
+    df2 = pd.read_sql_table('milestones', engine, columns=colnames.keys())
+    value_str = ['COMPLETED', 'STARTED', 'NOT COMPLETED']
+    for s in value_str:
+        filt = df2['title'].str.match(s)
+        df = df.join(df2[filt][['nct_id','count']] \
+            .groupby('nct_id').sum().rename(columns={'count':s}), how='inner')
+
+    # Check the various enrollment measures against each other and only keep 
+    # studies that make sense
+    filt = ((df['enrolled'] == df['STARTED']) & 
+            (df['dropped'] == df['NOT COMPLETED']) &
+            (df['STARTED'] == (df['NOT COMPLETED']+df['COMPLETED'])))
+    df = df[filt]
+
+    # return limited dataframe
+    df = df[['enrolled', 'dropped']]
+    return df
 
 
 def calc_dropout(engine):
@@ -81,8 +152,7 @@ def calc_dropout(engine):
             drops['period'].isin(['Overall Study']) &
             ~drops['reason'].isin(['Study Ongoing'])  # invalid dropout reason
         )
-        dropdf = drops[filt].groupby('nct_id').sum(
-        )[keepcols]  # accumulate total dropped
+        dropdf = drops[filt].groupby('nct_id').sum()[keepcols]  # accumulate total dropped
         dropdf.rename(columns=renaming, inplace=True)
 
         # Collect total number of participants actually enrolled in study
@@ -296,6 +366,70 @@ def get_data(savename=None):
     return df
 
 
+def get_all_tables(engine):
+    """ Given database connection, import and join all AACT tables
+
+    Args:
+        engine (engine): Connection to AACT database (sqlalchemy engine
+            connnection to postgresql database)
+
+    Return:
+        dfs (list of DataFrame): List where each element is an AACT table
+    """
+    table_names = [
+        # 'baseline_counts',              # x
+        # 'baseline_measurements',        # ~ male/female
+        # 'brief_summaries',              # ~ long text description
+        'browse_conditions',            # Y mesh terms of disease (3700) -> heirarchy, ID --> Get this!
+        'browse_interventions',         # Y mesh terms of treatment (~3000)
+        'calculated_values',            # Y (duration, num facilities, etc)
+        # 'conditions',                   # x condition name
+        'countries',                    # Y Country name
+        # 'design_group_interventions',   # x
+        # 'design_groups'                 # x
+        # 'design_outcomes',              # x
+        # 'designs',                      # x~ subject/caregiver/investigator blinded?
+        # 'detailed_descriptions',        # x 
+        'drop_withdrawals',             # Y
+        'eligibilities',                # Y (genders)
+        # 'facilities',                   # x
+        # 'intervention_other_names',     # x
+        'interventions',                # Y intervetion_type (11)
+        'keywords',                     # Y downcase_name (160,000!)
+        'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count
+        # 'outcomes',                     # x
+        # 'participant_flows',            # x
+        # 'reported_events',              # x
+        # 'result_groups',                # x
+        'studies'                       # Y study_type, overall_status (COMPLETED), phase (parse for 1/2/3)
+        ]
+
+    table_cols = {
+        'browse_conditions': {'nct_id':'nct_id',
+                              'downcase_mesh_term':'condition_mesh'},
+        'browse_interventions': {'nct_id':'nct_id',
+                                 'downcase_mesh_term':'intervention_mesh'},
+        'calculated_values': {'nct_id':'nct_id',
+                              'number_of_facilities':'number_of_facilities',
+                              'actual_duration':'actual_duration',
+                              'actual_duration':'actual_duration'},
+        'countries': {'nct_id':'nct_id',
+                      'name': 'country'}}
+    
+    dfs = []
+    if engine is not None:
+
+        for name in table_names:
+            print('getting {}'.format(name))
+            dfs.append(pd.read_sql_table(name, engine))
+
+
+    return dfs
+
+
+
+
+
 # ===================== Functions regarding model/fitting
 def split_data(df, save_suffix=None, test_size=None):
     """ Given data frame, split into training and text sets and save via pickle
@@ -351,7 +485,6 @@ def fit_model(df, savename=None):
         if iscat:
             formula.append(')')
     formulastr = ''.join(formula)
-
 
     # Setup model
     model = smf.ols(formulastr, data=df)

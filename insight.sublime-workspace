@@ -4,6 +4,86 @@
 		"selected_items":
 		[
 			[
+				"class",
+				"className"
+			],
+			[
+				"enro",
+				"enrolled_text\tparam"
+			],
+			[
+				"mar",
+				"margin-bottom"
+			],
+			[
+				"start_",
+				"start_year\tparam"
+			],
+			[
+				"de",
+				"determination"
+			],
+			[
+				"al",
+				"alpha"
+			],
+			[
+				"des",
+				"despine\tfunction"
+			],
+			[
+				"drop",
+				"droprate"
+			],
+			[
+				"no",
+				"norm_hist\tparam"
+			],
+			[
+				"pred_re",
+				"pred_report_CI"
+			],
+			[
+				"clas",
+				"className"
+			],
+			[
+				"pred_str",
+				"pred_str_CI\tstatement"
+			],
+			[
+				"predic",
+				"predicted_mean"
+			],
+			[
+				"input",
+				"input_value"
+			],
+			[
+				"pred",
+				"pred\tstatement"
+			],
+			[
+				"pre",
+				"predicted"
+			],
+			[
+				"colum",
+				"columns"
+			],
+			[
+				"form",
+				"formula\tstatement"
+			],
+			[
+				"for",
+				"formula\tstatement"
+			],
+			[
+				"not",
+				"notnull"
+			],
+			[
 				"inpu",
 				"input_value"
 			],
@@ -22,10 +102,6 @@
 			[
 				"respon",
 				"response_name"
-			],
-			[
-				"enro",
-				"enrolled"
 			],
 			[
 				"max",
@@ -76,10 +152,6 @@
 				"ypred_u"
 			],
 			[
-				"pre",
-				"pred_droprate"
-			],
-			[
 				"fil",
 				"fill_between\tfunction"
 			],
@@ -94,10 +166,6 @@
 			[
 				"inter",
 				"interval_l\tstatement"
-			],
-			[
-				"drop",
-				"droprate_tform"
 			],
 			[
 				"diagn",
@@ -158,10 +226,6 @@
 			[
 				"droprate",
 				"droprate_tform"
-			],
-			[
-				"colum",
-				"column"
 			],
 			[
 				"remove",
@@ -283,7 +347,7 @@
 			"file": "demo.py",
 			"settings":
 			{
-				"buffer_size": 18059,
+				"buffer_size": 19966,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -292,7 +356,7 @@
 			"file": "playground.py",
 			"settings":
 			{
-				"buffer_size": 2145,
+				"buffer_size": 3672,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -301,7 +365,7 @@
 			"file": "app/app.py",
 			"settings":
 			{
-				"buffer_size": 2063,
+				"buffer_size": 11370,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -369,7 +433,7 @@
 	],
 	"find":
 	{
-		"height": 41.0
+		"height": 51.0
 	},
 	"find_in_files":
 	{
@@ -383,6 +447,13 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"))\n",
+			"drop out",
+			"drop",
+			"chidren",
+			"wls_prediction_std",
+			"train_test",
+			"wls_prediction_std",
 			"conn",
 			"lint",
 			"conn",
@@ -400,13 +471,13 @@
 		"reverse": false,
 		"show_context": true,
 		"use_buffer2": true,
-		"whole_word": true,
+		"whole_word": false,
 		"wrap": true
 	},
 	"groups":
 	[
 		{
-			"selected": 2,
+			"selected": 0,
 			"sheets":
 			[
 				{
@@ -415,15 +486,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 18059,
+						"buffer_size": 19966,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								2102,
-								2102
+								12792,
+								12792
 							]
 						],
 						"settings":
@@ -433,6 +504,10 @@
 								{
 									"characters": "<",
 									"selector": "text.html"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -460,10 +535,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 228.0,
+						"translation.y": 855.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 0,
 					"type": "text"
 				},
 				{
@@ -472,15 +547,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2145,
+						"buffer_size": 3672,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								31,
-								12
+								392,
+								392
 							]
 						],
 						"settings":
@@ -494,6 +569,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								}
 							],
 							"syntax": "Packages/Python/Python.sublime-syntax"
@@ -502,7 +581,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
@@ -511,15 +590,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2063,
+						"buffer_size": 11370,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								1230,
-								1230
+								4620,
+								4620
 							]
 						],
 						"settings":
@@ -529,6 +608,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -548,10 +631,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 600.0,
+						"translation.y": 1665.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 2,
 					"type": "text"
 				}
 			]
@@ -559,7 +642,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 30.0
+		"height": 51.0
 	},
 	"input":
 	{
@@ -600,7 +683,7 @@
 	"project": "insight.sublime-project",
 	"replace":
 	{
-		"height": 76.0
+		"height": 42.0
 	},
 	"save_all_on_build": true,
 	"select_file":

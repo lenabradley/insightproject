@@ -7,6 +7,50 @@ import matplotlib.pyplot as plt
 df = pd.read_pickle('training_data.pkl')
 
 
+# ============ Compare complete/not complete vs Total dropouts
+
+
+
+import demo
+import pandas as pd
+engine = demo.connectdb()
+
+# V1
+colnames = {'nct_id': 'nct_id', 'count':'dropped'}
+df = pd.read_sql_table('drop_withdrawals', engine,
+                       columns=colnames.keys()
+                       ).groupby('nct_id').sum().rename(columns=colnames)
+
+# V2
+colnames = {'nct_id': 'nct_id', 'title': 'milestone_title', 'count':'milestone_count'}
+df2 = pd.read_sql_table('milestones', engine, columns=colnames.keys())
+
+value_str = ['COMPLETED', 'STARTED', 'NOT COMPLETED']
+for s in value_str:
+    filt = df2['title'].str.match(s)
+    df = df.join(df2[filt][['nct_id', 'count']].groupby('nct_id').sum().rename(columns={'count':s}),
+                 how='inner')
+
+colnames = {'nct_id':'nct_id', 'enrollment':'enrolled', 'enrollment_type': 'enrollment_type'}
+studies = pd.read_sql_table('studies', engine, 
+                            columns=colnames.keys()
+                            ).set_index('nct_id').rename(columns=colnames)
+filt = [x=='Actual' for x in studies['enrollment_type']]
+df = df.join(studies[filt][['enrolled']].astype(int), how='inner')
+df.dropna(how='any', inplace=True)
+
+# only keep rows that make sense
+filt = ((df['enrolled'] == df['STARTED']) & 
+        (df['dropped'] == df['NOT COMPLETED']) &
+        (df['STARTED'] == (df['NOT COMPLETED']+df['COMPLETED'])))
+df = df[filt]
+
+
+
+
+
+
+
 # ============= FIT MODEL
 res = demo.fit_model(df)
 
@@ -15,7 +59,33 @@ print(res.summary())
 demo.diagnotic_plots(res, show=True)
 
 # Save linear model results via pickle (data included)
-res.save('training_res.pkl', remove_data=False)
+res.save('training_res_mod.pkl', remove_data=False)
+
+
+
+
+# PLOTS
+sns.set(style='whitegrid', context='notebook')
+cols = ['start_year', 'duration', 'num_facilities', 'minimum_age_years', 'enrolled','droprate']
+df2 = df.dropna()
+sns.pairplot(df2[cols], size=2.5)
+plt.show()
+
+
+
+cm = np.corrcoef(df2[cols].values.T)
+fig = sns.set(font_scale=0.75)
+hm = sns.heatmap(cm,
+    cbar=True,
+    annot=True,
+    square=True,
+    fmt='.2f',
+    annot_kws={'size': 15},
+    yticklabels=cols,
+    xticklabels=cols)
+plt.show()
+
+
 
 
 
