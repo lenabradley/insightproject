@@ -3,6 +3,18 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+
+# ============ Correlation plots, etc
+df = demo.get_data()
+
+cols = []
+for c in list(df.columns):
+    if c.find('_')<0 and c.find('phase')<0 and c.find('groups')<0:
+        cols.append(c)
+
+sns.pairplot(df[cols], dropna=True
+plt.show()
+
 # ============ GATHER DATA
 df = pd.read_pickle('training_data.pkl')
 
@@ -73,6 +85,7 @@ plt.show()
 
 
 
+cols = df.columns
 cm = np.corrcoef(df2[cols].values.T)
 fig = sns.set(font_scale=0.75)
 hm = sns.heatmap(cm,

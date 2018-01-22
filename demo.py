@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import argparse
-import psycopg2
+# import psycopg2
 from config import config
 from sqlalchemy import create_engine
 # from sqlalchemy_utils import database_exists, create_database
@@ -14,6 +14,7 @@ import seaborn as sns
 import statsmodels.formula.api as smf
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 import re
+from sklearn import linear_model
 
 # Input parser
 parser = argparse.ArgumentParser(
@@ -267,7 +268,7 @@ def gather_features():
     # convert to lowercase, remove non-alphabetic characters
     intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x) 
                         for x in intvtype['intvtype'].str.lower()]
-
+    intvtype = pd.get_dummies(intvtype).groupby('nct_id').any()
     # ================ 
 
     # ================ Gather keywords info from 'keywords' (only keep top N)
@@ -402,7 +403,6 @@ def all_feature_plots(df, response_name='dropped', show=False, savedir=None):
             plt.close(fig)
 
     return f
-
 
 
 # ===================== Functions regarding model/fitting
