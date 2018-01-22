@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 import seaborn as sns
 import statsmodels.formula.api as smf
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
+import re
 
 # Input parser
 parser = argparse.ArgumentParser(
@@ -71,7 +72,7 @@ def gather_response():
     """
 
     # Connect to AACT database
-    engine = demo._connectdb_()
+    engine = _connectdb_()
 
 
     # Gather enrollment/dropout numbers - PART 1a
@@ -122,170 +123,235 @@ def gather_response():
     return df
 
 
-def calc_dropout(engine):
-    """ Given database connection, calculate enrollment & drop out totals, rate
-
-    Args:
-        engine (engine): Connection to AACT database (sqlalchemy engine
-            connnection to postgresql database)
+def gather_features():
+    """ Connect to AACT database, join select data, and return as a dataframe
 
     Return:
-        df (DataFrame): Table with columns for...
-                        'nct_id': study ID (index)
-                        'enrolled': actually study enrollment
-                        'droprate': ratio of dropped to enrolled
+        df (DataFrame): pandas dataframe with full data
 
-    Note:
-    - Various filtering has been implemented on both the dropout and overall 
-        study data, to ex/include in/valid data entries. See code for details
-    - Use 'nct_id' as indexing column
+    Notes:
+    - filter for Completed & Inverventional studies only
+    - Creates dummy variables
+    - Only keep top N most common terms for 'browse_conditions', 
+      'browse_interventions', and 'keywords' (N is hardcoded in this function)
     """
-    df = None
-    if engine is not None:
 
-        # Calculate number of participants dropped from each study
-        keepcols = ['count']
-        renaming = {'count': 'dropped'}
-        drops = pd.read_sql_table('drop_withdrawals', engine)  # withdrawl table
-        filt = (
-            # only look at 'Overall Study' period
-            drops['period'].isin(['Overall Study']) &
-            ~drops['reason'].isin(['Study Ongoing'])  # invalid dropout reason
-        )
-        dropdf = drops[filt].groupby('nct_id').sum()[keepcols]  # accumulate total dropped
-        dropdf.rename(columns=renaming, inplace=True)
+    """ Notes to self
+    table_names = [
+        # 'baseline_counts',              # x
+        'baseline_measurements',        # Y male/female [category, param_value_num]
+        # 'brief_summaries',              # ~ long text description
+        'browse_conditions',            # Y mesh terms of disease (3700) -> heirarchy, ID --> Get this!
+        'browse_interventions',         # Y mesh terms of treatment (~3000)
+        'calculated_values',            # Y [number_of_facilities, registered_in_calendar_year, registered_in_calendar_year, registered_in_calendar_year, min age, max age]
+        # 'conditions',                   # x condition name
+        # 'countries',                    # ~ Country name
+        # 'design_group_interventions',   # x
+        # 'design_groups'                 # x
+        # 'design_outcomes',              # x
+        # 'designs',                      # x~ subject/caregiver/investigator blinded?
+        # 'detailed_descriptions',        # x 
+        # 'drop_withdrawals',             # Y --> already in response
+        # 'eligibilities',                # Y (genders) --> Already got from baseline?
+        # 'facilities',                   # x
+        # 'intervention_other_names',     # x
+        'interventions',                # Y intervetion_type (11)
+        'keywords',                     # Y downcase_name (160,000!)
+        # 'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count --> already in response
+        # 'outcomes',                     # x
+        # 'participant_flows',            # x
+        # 'reported_events',              # x
+        # 'result_groups',                # x
+        'studies'                       # Y [study_type, overall_status (filt), phase (parse), number_of_arms, number_of_groups, has_dmc, is_fda_regulated_drug, is_fda_regulated_device, is_unapproved_device]
+    ]
+    """
 
-        # Collect total number of participants actually enrolled in study
-        keepcols = ['nct_id', 'enrollment']
-        renaming = {'enrollment': 'enrolled'}
-        studies = pd.read_sql_table('studies', engine)
-        filt = (
-            # Interventional studies only
-            studies['study_type'].isin(['Interventional']) &
-            # Actually enrollment numbers only
-            studies['enrollment_type'].isin(['Actual']) &
-            studies['overall_status'].isin(
-                ['Completed'])  # Study has completed
-        )
-        startdf = studies[filt][keepcols]
-        startdf.set_index('nct_id', inplace=True)
-        startdf.rename(columns=renaming, inplace=True)
-        startdf['enrolled'] = startdf['enrolled'].astype('int64')
+    # Connect to database
+    engine = _connectdb_()
 
-        # Combine the tables & calculate dropout rate
-        df = startdf.join(dropdf, how='inner')
-        df['droprate'] = df['dropped'] / df['enrolled']
+    # ================ Gather fe/male counts from 'baseline_measurements'
+    colnames = {'nct_id': 'nct_id',
+                'category': 'category',
+                'classification': 'classification',
+                'param_value_num': 'count'}
+    meas = pd.read_sql_table('baseline_measurements', engine,
+                             columns=colnames.keys()).rename(columns=colnames)
+    meas.set_index('nct_id', inplace=True)
 
-        # Lose the 'dropped' column (not useful)
-        df.drop(columns='dropped', inplace=True)
+    # Determine if these particpant group counts are for fe/male
+    sexes = ['male', 'female']
+    for s in sexes:
+        filt = (meas['category'].str.lower().str.match(s) |
+                meas['classification'].str.lower().str.match(s))
+        meas[s] = np.NaN
+        meas.loc[filt, s] = meas[filt]['count']
+
+    # Group/sum by study id, forcing those with no info back to nans
+    noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
+    meas = meas[sexes].groupby('nct_id').sum()
+    meas.loc[noinfo, sexes] = np.NaN
+    # ================ 
+
+    # ================ Gather condition MeSH terms from 'browse_conditions' (only keep N most common)
+    N = 5
+    colnames = {'nct_id': 'nct_id',
+                'mesh_term': 'cond'}
+    conds = pd.read_sql_table('browse_conditions', engine,
+                              columns=colnames.keys()
+                              ).rename(columns=colnames).set_index('nct_id')
+    conds['cond'] = conds['cond'].str.lower()
+    topN_conds = conds['cond'].value_counts().head(N).index.tolist()
+    conds['cond'] = [re.sub(r'[^a-z]', '', x) if x in topN_conds
+                     else None for x in conds['cond']]
+    conds = pd.get_dummies(conds).groupby('nct_id').any()
+    # ================ 
+
+    # ================ Gather intervention MeSH terms from 'browse_interventions' (only keep N most common)
+    N = 5
+    colnames = {'nct_id': 'nct_id',
+                'mesh_term': 'intv'}    
+    intv = pd.read_sql_table('browse_interventions', engine,
+                             columns=colnames.keys()
+                             ).rename(columns=colnames).set_index('nct_id')
+    intv['intv'] = intv['intv'].str.lower()
+    topN_intv = intv['intv'].value_counts().head(N).index.tolist()
+    intv['intv'] = [re.sub(r'[^a-z]', '', x) if x in topN_intv 
+                    else None for x in intv['intv']]
+    intv = pd.get_dummies(intv).groupby('nct_id').any()
+    # ================ 
+
+
+    # ================ Gather various info from 'calculated_values'  
+    colnames = {'nct_id': 'nct_id',
+                'number_of_facilities': 'facilities',
+                'registered_in_calendar_year': 'year',
+                'actual_duration': 'duration',
+                'has_us_facility': 'usfacility',
+                'minimum_age_num': 'minimum_age_num',
+                'maximum_age_num': 'maximum_age_num',
+                'minimum_age_unit': 'minimum_age_unit',
+                'maximum_age_unit': 'maximum_age_unit'}
+    calc = pd.read_sql_table('calculated_values', engine,
+                             columns=colnames.keys()
+                             ).rename(columns=colnames).set_index('nct_id')
+
+    # convert age units into years
+    unit_map = {'year': 1., 'month':1/12., 'week': 1/52.1429,
+                'day': 1/365.2422, 'hour': 1/8760., 'minute': 1/525600.}
+    for s in ['minimum_age', 'maximum_age']:
+        calc[s+'_unit'] = [re.sub(r's$', '', x).strip() if x is not None else None
+                   for x in calc[s+'_unit'].str.lower()]
+        calc[s+'_factor'] = calc[s+'_unit'].map(unit_map)
+        calc[s+'_years'] = calc[s+'_num'] * calc[s+'_factor']
+
+    # only keep colums we need, & rename some
+    colnames = {'facilities': 'facilities',
+                'year': 'year',
+                'duration': 'duration',
+                'usfacility': 'usfacility',
+                'minimum_age_years': 'minage',
+                'maximum_age_years': 'maxage'}
+    calc = calc[list(colnames.keys())].rename(columns=colnames)
+    # ================ 
+
+    # ================ Gather intervention type info from 'interventions' 
+    colnames = {'nct_id': 'nct_id',
+                'intervention_type': 'intvtype'}
+    intvtype = pd.read_sql_table('interventions', engine,
+                             columns=colnames.keys()
+                             ).rename(columns=colnames).set_index('nct_id')
+    
+    # drop duplicates
+    intvtype = intvtype[~intvtype.index.duplicated(keep='first')]
+
+    # convert to lowercase, remove non-alphabetic characters
+    intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x) 
+                        for x in intvtype['intvtype'].str.lower()]
+
+    # ================ 
+
+    # ================ Gather keywords info from 'keywords' (only keep top N)
+    N = 5
+    colnames = {'nct_id': 'nct_id',
+                'name': 'keyword'}
+    words = pd.read_sql_table('keywords', engine,
+                              columns=colnames.keys()
+                              ).rename(columns=colnames).set_index('nct_id')
+    words['keyword'] = words['keyword'].str.lower()
+    topN_words = words['keyword'].value_counts().head(N).index.tolist()
+    words['keyword'] = [re.sub(r'[^a-z]', '', x) if x in topN_words
+                    else None for x in words['keyword']]
+    words = pd.get_dummies(words).groupby('nct_id').any()
+    # ================ 
+
+    # ================ Gather various info from 'studies' (filter for Completed & Inverventional studies only!)
+    colnames = {'nct_id': 'nct_id',
+                'study_type': 'studytype',
+                'overall_status': 'status',
+                'phase': 'phase',
+                'number_of_arms': 'arms',
+                'number_of_groups': 'groups'}
+    studies = pd.read_sql_table('studies', engine,
+                                columns=colnames.keys()
+                                ).rename(columns=colnames).set_index('nct_id')
+    
+    # filter to only keep 'Completed' studies
+    filt = (studies['status'].str.match('Completed') & 
+            studies['studytype'].str.match('Interventional'))
+    studies = studies[filt].drop(columns=['status', 'studytype'])
+
+    # parse study phases
+    for n in [1,2,3, 4]:
+        filt = studies['phase'].str.contains(str(n))
+        studies['phase'+str(n)] = False
+        studies.loc[filt,'phase'+str(n)] = True
+    studies.drop(columns=['phase'], inplace=True)
+    # ================ 
+
+    # ================ Combine all dataframes together!
+    # Note: left join all data onto 'studies' (so only keep data for completed, 
+    # interventional studies)
+
+    df = studies
+    for d in [meas, conds, intv, calc, intvtype, words]:
+        df = df.join(d, how='left')
 
     return df
 
 
-def remove_drops(df, thresh=1.0):
-    """ Return dataframe with entries above a given threshold of droprate
-    removed
-    """
-    return df[df['droprate'] < thresh]
-
-
-def calc_features(engine):
-    """ Given database connection, gather various study features
-
-    Args:
-        engine (engine): Connection to AACT database (sqlalchemy engine 
-            connnection to postgresql database)
-
+def get_data(savename=None):
+    """ Connect to AACT database and gather data of interest
+    
+    Kwargs:
+        savename (string): If not None, save the resulting DataFrame with
+                           data to this file name using pickle
+    
     Return:
-        df (DataFrame): Table with columns for various features, including
-            'nct_id' (study ID) as the index
-
-    Note:
-    - Use 'nct_id' as indexing column
+        df (DataFrame): Pandas DataFrame with data features and responses
     """
 
-    df = pd.DataFrame()
+    # Collect data (features & response, inner join)
+    df = gather_features().join(gather_response(), how='inner')
 
-    # ============== Data from AACT Calculated_Values table (1)
-    # Table of AACT calculated values
-    if engine is not None:
-        keepcols = [
-            'nct_id', 'registered_in_calendar_year', 'actual_duration',
-            'number_of_facilities', 'has_us_facility',
-            'minimum_age_num', 'minimum_age_unit',
-            'maximum_age_num', 'maximum_age_unit']
-        calcvals = pd.read_sql_table('calculated_values', engine,
-                                     columns=keepcols)
+    # Remove 100% dropouts
+    df = remove_highdrops(df)
 
-        # Calculate min age in years
-        minimum_age_years = calcvals['minimum_age_num'].copy()
-        notnull = calcvals['minimum_age_unit'].notnull()
-        filt = notnull & calcvals['minimum_age_unit'].str.contains('Month')
-        minimum_age_years[filt] = minimum_age_years[filt] / \
-            12  # convert from months
-        filt = notnull & calcvals['minimum_age_unit'].str.contains('Weeks')
-        minimum_age_years[filt] = minimum_age_years[filt] / \
-            52  # convert from weeks
-        filt = notnull & calcvals['minimum_age_unit'].str.contains('Days')
-        minimum_age_years[filt] = minimum_age_years[filt] / \
-            365  # convert from days
-        calcvals['minimum_age_years'] = minimum_age_years
+    # Save
+    if savename is not None:
+        df.to_pickle(savename)
 
-        # Calculate max age in years
-        maximum_age_years = calcvals['maximum_age_num'].copy()
-        notnull = calcvals['maximum_age_unit'].notnull()
-        filt = notnull & calcvals['maximum_age_unit'].str.contains('Month')
-        maximum_age_years[filt] = maximum_age_years[filt] / \
-            12  # convert from months
-        filt = notnull & calcvals['maximum_age_unit'].str.contains('Weeks')
-        maximum_age_years[filt] = maximum_age_years[filt] / \
-            52  # convert from weeks
-        filt = notnull & calcvals['maximum_age_unit'].str.contains('Days')
-        maximum_age_years[filt] = maximum_age_years[filt] / \
-            365  # convert from days
-        filt = notnull & calcvals['maximum_age_unit'].str.contains('Hour')
-        maximum_age_years[filt] = maximum_age_years[filt] / \
-            (365 * 24)  # convert from hours
-        filt = notnull & calcvals['maximum_age_unit'].str.contains('Minute')
-        maximum_age_years[filt] = maximum_age_years[filt] / \
-            (365 * 24 * 60)  # convert from minutes
-        calcvals['maximum_age_years'] = maximum_age_years
-
-        # Select columns of interest (& rename some)
-        keepcols = [
-            'nct_id', 'registered_in_calendar_year', 'actual_duration',
-            'number_of_facilities', 'has_us_facility',
-            'minimum_age_years', 'maximum_age_years']
-        renaming = {
-            'registered_in_calendar_year': 'start_year',
-            'actual_duration': 'duration',
-            'number_of_facilities': 'num_facilities'}
-        df1 = calcvals[keepcols].copy().rename(columns=renaming)
-
-        # Overwrite existing data
-        df1.set_index('nct_id', inplace=True)
-        df = df1
-
-    # ============== Data from AACT Conditions table (2)
-    if engine is not None:
-        # Table of AACT-determined conditions
-        conditions = pd.read_sql_table('conditions', engine,
-                                       columns=['nct_id', 'downcase_name'])
-
-        # Does this condition include the word 'cancer'?
-        conditions['is_cancer'] = conditions['downcase_name'].str.contains(
-            '|'.join(('cancer', '[a-z]+oma', 'leukemia', 'tumor')))
-
-        # Collect to the study level
-        df2 = conditions[['nct_id', 'is_cancer']].groupby('nct_id').any()
-
-        # Merge with existing data
-        df = df.join(df2, how='inner')
-
+    # Return
     return df
 
 
-def all_feature_plots(df, response_name='droprate', show=False, savedir=None):
+def remove_highdrops(df, thresh=1.0):
+    """ Given dataframe, remove rows where the dropout rate is above thresh, and
+    return the resulting dataframe
+    """
+    return df[df['dropped'] < df['enrolled']*thresh]
+
+
+def all_feature_plots(df, response_name='dropped', show=False, savedir=None):
     """ Given data table, plot the response against each feature
 
     Args:
@@ -301,7 +367,7 @@ def all_feature_plots(df, response_name='droprate', show=False, savedir=None):
         f (list): list of figure (handle, axes) tuples for the plots created
     """
 
-    feature_names = df.columns[['droprate' not in c for c in df.columns]]
+    feature_names = df.columns[[response_name not in c for c in df.columns]]
     sns.set_style("ticks")
     f = []
 
@@ -336,105 +402,6 @@ def all_feature_plots(df, response_name='droprate', show=False, savedir=None):
             plt.close(fig)
 
     return f
-
-
-def get_data(savename=None):
-    """ Connect to AACT database and gather data/featuresof interest
-    
-    Kwargs:
-        savename (string): If not None, save the resulting DataFrame with
-                           data to this file name using pickle
-    
-    Return:
-        df (DataFrame): Pandas DataFrame with data features and responses
-    """
-
-    # establish connection to trials database
-    engine = connectdb()
-
-    # Collect data
-    df = calc_features(engine).join(calc_dropout(engine), how='inner')
-
-    # Remove high drop rates
-    df = remove_drops(df)
-
-    # Save
-    if savename is not None:
-        df.to_pickle(savename)
-
-    # Return
-    return df
-
-
-def get_all_tables():
-    """ Connect to AACT database, join select data, and return as a dataframe
-
-    Args:
-        engine (engine): Connection to AACT database (sqlalchemy engine
-            connnection to postgresql database)
-
-    Return:
-        dfs (list of DataFrame): List where each element is an AACT table
-    """
-
-
-    table_names = [
-        # 'baseline_counts',              # x
-        'baseline_measurements',        # Y male/female [category, param_value_num]
-        # 'brief_summaries',              # ~ long text description
-        'browse_conditions',            # Y mesh terms of disease (3700) -> heirarchy, ID --> Get this!
-        'browse_interventions',         # Y mesh terms of treatment (~3000)
-        'calculated_values',            # Y [number_of_facilities, registered_in_calendar_year, registered_in_calendar_year, registered_in_calendar_year, min age, max age]
-        # 'conditions',                   # x condition name
-        'countries',                    # Y Country name
-        # 'design_group_interventions',   # x
-        # 'design_groups'                 # x
-        # 'design_outcomes',              # x
-        # 'designs',                      # x~ subject/caregiver/investigator blinded?
-        # 'detailed_descriptions',        # x 
-        # 'drop_withdrawals',             # Y --> already in response
-        'eligibilities',                # Y (genders)
-        # 'facilities',                   # x
-        # 'intervention_other_names',     # x
-        'interventions',                # Y intervetion_type (11)
-        'keywords',                     # Y downcase_name (160,000!)
-        # 'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count --> already in response
-        # 'outcomes',                     # x
-        # 'participant_flows',            # x
-        # 'reported_events',              # x
-        # 'result_groups',                # x
-        'studies'                       # Y [study_type, overall_status (filt), phase (parse), number_of_arms, number_of_groups, has_dmc, is_fda_regulated_drug, is_fda_regulated_device, is_unapproved_device]
-    ]
-
-    # Connect to database
-    engine = _connectdb_()
-
-    # ================ Gather fe/male counts from 'baseline_measurements'
-    colnames = {'nct_id': 'nct_id',
-                'category': 'category',
-                'classification': 'classification',
-                'param_value_num': 'count'}
-    meas = pd.read_sql_table('baseline_measurements', engine,
-                             columns=colnames.keys()).rename(columns=colnames)
-    meas.set_index('nct_id', inplace=True)
-
-    # Determine if these particpant group counts are for fe/male
-    sexes = ['male', 'female']
-    for s in sexes:
-        filt = (meas['category'].str.lower().str.match(s) |
-                meas['classification'].str.lower().str.match(s))
-        meas[s] = np.NaN
-        meas.loc[filt, s] = meas[filt]['count']
-
-    # Group/sum by study id, forcing those with no info back to nans
-    noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
-    meas = meas[sexes].groupby('nct_id').sum()
-    meas.loc[noinfo, sexes] = np.NaN
-    # ================ 
-
-    print('THIS FUNCTION IS NOT COMPLETE!!!')
-    return None
-
 
 
 
