@@ -10,6 +10,10 @@
 	],	
 	"settings":
 	{
-		"python_interpreter": "/home/lena/anaconda3/envs/projects/bin/python3"
+		"python_interpreter": "/home/lena/anaconda3/envs/projects/bin/python3",
+		"rulers": [80],
+		"detect_indentation": true,
+		"tab_size": 4,
+		"translate_tabs_to_spaces": false
 	}
 }

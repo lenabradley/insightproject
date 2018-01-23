@@ -9,14 +9,45 @@ df = demo.get_data()
 
 cols = []
 for c in list(df.columns):
-    if c.find('_')<0 and c.find('phase')<0 and c.find('groups')<0:
+    if (c.find('_')<0 and c.find('phase')<0 and c.find('groups')<0
+        and c.find('dropped')<0 and c.find('enrolled')<0):
         cols.append(c)
 
-sns.pairplot(df[cols], dropna=True
+sns.set(font_scale=0.75) 
+
+# GRID PLOT
+g = sns.PairGrid(df[cols].dropna(), size=1)
+g = g.map_diag(plt.hist)
+g = g.map_offdiag(plt.scatter, s=5, alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# Corr coefs plot
+# Corr coefs plot
+cm =df[cols].corr().as_matrix()
+hm = sns.heatmap(cm,
+    cbar=True,
+    annot=True,
+    square=True,
+    fmt='.2f',
+    annot_kws={'size': 7},
+    yticklabels=cols,
+    xticklabels=cols)
+plt.yticks(rotation=0) 
+plt.xticks(rotation=90) 
 plt.show()
 
 # ============ GATHER DATA
 df = pd.read_pickle('training_data.pkl')
+
+
+# ============
+
+
+
+
+
+
 
 
 # ============ Compare complete/not complete vs Total dropouts
