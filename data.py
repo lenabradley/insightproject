@@ -12,6 +12,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
 import re
+from sklearn.model_selection import train_test_split
 import seaborn as sns
 
 
@@ -35,8 +36,8 @@ def _gather_response():
 
     Returns:
         df (DataFrame): Pandas dataframe with columns for study ID ('nct_id'), 
-                        number of participants enrolled ('enrolled') at the 
-                        start, and the number that dropped out ('dropped')
+            number of participants enrolled ('enrolled') at the start, and the
+            number that dropped out ('dropped')
 
     Notes:
     - Only keep studies with valid (non-nan) data
@@ -100,13 +101,15 @@ def _gather_response():
     return df
 
 
-def _gather_features(N=100):
+def _gather_features(N=10, fill_intelligent=True):
     """ Connect to AACT database, join select data, and return as a dataframe
 
     Args:
         N (int): For each word-based categorical features (i.e. MeSH conditions,
-                 MeSH interventions, and keywords), only keep the top N most
-                 common strings as features (dummies). Default is 5
+            MeSH interventions, and keywords), only keep the top N most common 
+            strings as features (dummies). Default is 10
+        fill_intelligent (bool): If True, fill empty/null/NaNs with best-guess 
+            values. If False, leave as NaNs. Default is True
 
     Return:
         df (DataFrame): pandas dataframe with full data
@@ -114,8 +117,6 @@ def _gather_features(N=100):
     Notes:
     - filter for Completed & Inverventional studies only
     - Creates dummy variables
-    - Only keep top N most common terms for 'browse_conditions',
-      'browse_interventions', and 'keywords' (N is hardcoded in this function)
     """
 
     """ Notes to self about tables
@@ -166,15 +167,24 @@ def _gather_features(N=100):
     # Determine if these particpant group counts are for fe/male
     sexes = ['male', 'female']
     for s in sexes:
-        filt = (meas['category'].str.lower().str.match(s) |
-                meas['classification'].str.lower().str.match(s))
-        meas[s] = np.NaN
+        filt = ((meas['category'].str.lower().str.match(s) |
+                 meas['classification'].str.lower().str.match(s)) &
+                meas['count'].notnull())
+        if fill_intelligent:
+            meas[s] = int(0)
+        else:
+            meas[s] = np.nan
         meas.loc[filt, s] = meas[filt]['count']
 
     # Group/sum by study id, forcing those with no info back to nans
     noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
     meas = meas[sexes].groupby('nct_id').sum()
-    meas.loc[noinfo, sexes] = np.NaN
+
+    if fill_intelligent:
+        for s in sexes:
+            meas[s] = meas[s].astype(int)
+    else:
+        meas.loc[noinfo, sexes] = np.NaN
     # ================ 
 
     # ================ Gather condition MeSH terms from 'browse_conditions'
@@ -215,9 +225,7 @@ def _gather_features(N=100):
                 'actual_duration': 'duration',
                 'has_us_facility': 'usfacility',
                 'minimum_age_num': 'minimum_age_num',
-                'maximum_age_num': 'maximum_age_num',
-                'minimum_age_unit': 'minimum_age_unit',
-                'maximum_age_unit': 'maximum_age_unit'}
+                'minimum_age_unit': 'minimum_age_unit'}
     calc = pd.read_sql_table('calculated_values', engine,
                              columns=colnames.keys()
                              ).rename(columns=colnames).set_index('nct_id')
@@ -225,20 +233,27 @@ def _gather_features(N=100):
     # convert age units into years
     unit_map = {'year': 1., 'month':1/12., 'week': 1/52.1429,
                 'day': 1/365.2422, 'hour': 1/8760., 'minute': 1/525600.}
-    for s in ['minimum_age', 'maximum_age']:
-        calc[s+'_unit'] = [re.sub(r's$', '', x).strip() if x is not None else None
-                   for x in calc[s+'_unit'].str.lower()]
-        calc[s+'_factor'] = calc[s+'_unit'].map(unit_map)
-        calc[s+'_years'] = calc[s+'_num'] * calc[s+'_factor']
+
+    calc['minimum_age_unit'] = [re.sub(r's$', '', x).strip() if x is not None
+                                else None for x in
+                                calc['minimum_age_unit'].str.lower()]
+    calc['minimum_age_factor'] = calc['minimum_age_unit'].map(unit_map)
+    calc['minimum_age_years'] = (calc['minimum_age_num'] *
+                                 calc['minimum_age_factor'])
 
     # only keep colums we need, & rename some
     colnames = {'facilities': 'facilities',
                 'year': 'year',
                 'duration': 'duration',
                 'usfacility': 'usfacility',
-                'minimum_age_years': 'minage',
-                'maximum_age_years': 'maxage'}
+                'minimum_age_years': 'minage'} # removing maxage - mostly empty not useful
     calc = calc[list(colnames.keys())].rename(columns=colnames)
+    
+    # Fill nans with best-guesses
+    if fill_intelligent:
+        calc['minage'] = calc['minage'].fillna(0).astype(int) # assume minage is 0
+        calc['usfacility'] = calc['usfacility'].fillna(True) # assume yes it has US facility
+        calc['facilities'] = calc['facilities'].fillna(1).astype(int) # assume 1 facility
     # ================ 
 
     # ================ Gather intervention type info from 'interventions' 
@@ -252,8 +267,8 @@ def _gather_features(N=100):
     intvtype = intvtype[~intvtype.index.duplicated(keep='first')]
 
     # convert to lowercase, remove non-alphabetic characters
-    intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x) 
-                        for x in intvtype['intvtype'].str.lower()]
+    intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x)
+                            for x in intvtype['intvtype'].str.lower()]
     intvtype = pd.get_dummies(intvtype).groupby('nct_id').any()
     # ================ 
 
@@ -268,7 +283,7 @@ def _gather_features(N=100):
     # Limit to the to N terms & create dummy vars
     topN_words = words['keyword'].value_counts().head(N).index.tolist()
     words['keyword'] = [re.sub(r'[^a-z]', '', x) if x in topN_words
-                    else None for x in words['keyword']]
+                        else None for x in words['keyword']]
     words = pd.get_dummies(words).groupby('nct_id').any()
     # ================ 
 
@@ -293,15 +308,35 @@ def _gather_features(N=100):
         studies['phase'+str(n)] = False
         studies.loc[filt,'phase'+str(n)] = True
     studies.drop(columns=['phase'], inplace=True)
+
+    if fill_intelligent:
+        studies['arms'] = studies['arms'].fillna(1).astype(int)
     # ================ 
 
     # ================ Combine all dataframes together!
     # Note: left join all data onto 'studies' (so only keep data for completed, 
     # interventional studies)
 
+
+    # # ======= start DEBUGGING
+    # all_tables = [meas, conds, intv, calc, intvtype, words, studies]
+
+    # # Gather all study ids
+    # test = pd.concat([x.index.to_series() for x in all_tables])
+    # unique_ids = test.unique()
+
+    # # Find which IDs are in all tables
+    # ids_inall = []
+    # for id in unique_ids:
+    #     if all([id in x.index for x in all_tables]):
+    #         ids_inall.append(id)
+    # # ======= end DEBUGGING
+
     df = studies
     for d in [meas, conds, intv, calc, intvtype, words]:
-        df = df.join(d, how='left')
+        df = df.join(d, how='inner')
+
+
 
     return df
 
@@ -313,32 +348,30 @@ def remove_highdrops(df, thresh=1.0):
     return df[df['dropped'] < df['enrolled']*thresh]
 
 
-def get_data(savename=None):
+def get_data(savename=None, dropna=True, N=10, fill_intelligent=True):
     """ Connect to AACT database and gather data of interest
 
     Kwargs:
         savename (string): If not None, save the resulting DataFrame with
-                           data to this file name using pickle
+            data to this file name using pickle
+        dropna (bool): If True, drop rows that have any null/nan 
+        N (int): For each word-based categorical features (i.e. MeSH conditions,
+            MeSH interventions, and keywords), only keep the top N most common 
+            strings as features (dummies). Default is 10
+        fill_intelligent (bool): If True, fill empty/null/NaNs features with
+            best-guess values. If False, leave as NaNs. Default is True
 
     Return:
         df (DataFrame): Pandas DataFrame with data features and responses
     """
 
     # Collect data (features & response, inner join)
-    df = _gather_features().join(_gather_response(), how='inner')
+    dfX = _gather_features(N=N, fill_intelligent=fill_intelligent)
+    dfY = _gather_response()
+    df = dfY.join(dfX, how='inner').dropna(how='any')
 
     # Remove 100% dropouts
     df = remove_highdrops(df)
-
-    # Fill some NaNs with default values, where appropriate
-    colstofill = []
-    for c in list(df.columns):
-        if '_' in c:
-            colstofill.append(c)
-        elif 'usfacility' in c:
-            colstofill.append(c)
-    for c in colstofill:
-        df[c].fillna(False, inplace=True)
 
     # Drop columns that only have 1 unique value (no info)
     for c in df.columns.tolist():
@@ -351,6 +384,33 @@ def get_data(savename=None):
 
     # Return
     return df
+
+
+def split_data(df, save_suffix=None, test_size=None):
+    """ Given data frame, split into training and text sets and save via pickle
+
+    Args:
+        df (DataFrame): pandas dataframe with data to split
+
+    Kwargs:
+        save_suffix (str): If not none save the training and testing data via 
+            pickle, and append this to the filename (e.g. 
+            'training_<save_suffix>.pkl' or 'testing_<save_suffix>.pkl'
+        test_size (float, int, or None): proportion of data to include in test 
+            set, see train_test_split() documentation for more
+    
+    Returns:
+        dfsplit (list): 2-element list with training and testing dataframes, 
+            respectively (as output by train_test_split)
+    """
+    dfsplit = train_test_split(df)
+
+    # Save training and testing data
+    if save_suffix is not None:
+        dfsplit[0].to_pickle('training_{}.pkl'.format(save_suffix))
+        dfsplit[1].to_pickle('testing_{}.pkl'.format(save_suffix))
+    
+    return dfsplit
 
 
 def feature_plots(df):
@@ -390,3 +450,5 @@ def feature_plots(df):
     plt.xticks(rotation=90)
     plt.tight_layout()
     plt.show()
+
+
