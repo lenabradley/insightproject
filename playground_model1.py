@@ -67,10 +67,42 @@ for p in prefixes:
 
 
 # === MODEL: LINEAR REGRESSION + NORMALIZATION + TFORM Y + LASSO === #
-reg = linear_model.Lasso(alpha=0.0001, normalize=True)
+reg = linear_model.Lasso(normalize=True)
 reg.fit(X, ytform)
 ypred = reg.predict(X)
 
+# === PRINT OUTPUTS === #
+print('\n ** Linear regression + normalization + transform y + LASSO')
+print('Non-zero coefficients:')
+for (c,f) in sorted(zip(reg.coef_, feature_names)):
+    if abs(c) > 0:
+        print('{:+0.2f}\t{}'.format(c, f))
+
+print("RMS error: {:.2f}".format(mean_squared_error(ytform, ypred)**(1/2)))
+print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))
+
+
+# === MODEL: CV GRID SEARCH for hyperparameters === #
+clf = GridSearchCV(reg, 
+             param_grid={'alpha': [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]},
+             scoring=make_scorer(r2_score))
+clf.fit(X, ytform)
+print("Best hyperparameters: {}".format(clf.best_params_))
+print("* Grid scores:")
+means = clf.cv_results_['mean_test_score']
+stds = clf.cv_results_['std_test_score']
+for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+    print("  %0.3f (+/-%0.03f) for %r"
+          % (mean, std * 2, params))
+
+best_alpha = clf.best_params_['alpha']
+
+
+
+# === MODEL: REFIT WITH BEST ALPHA === #
+reg = linear_model.Lasso(alpha=best_alpha, normalize=True)
+reg.fit(X, ytform)
+ypred = reg.predict(X)
 
 # === PRINT OUTPUTS === #
 print('\n ** Linear regression + normalization + transform y + LASSO')
@@ -82,11 +114,6 @@ print("RMS error: {:.2f}".format(mean_squared_error(ytform, ypred)**(1/2)))
 print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))
 
 
-# === MODEL: CV GRID SEARCH === #
-clf = GridSearchCV(reg, 
-             param_grid={'alpha': [1, 1e-1, 1e-2, 1e-3, 1e-4]},
-             scoring=make_scorer(r2_score))
-clf.fit(X, ytform)
 
 # === MODEL: K-FOLD CROSS VALIDATION (i.e. check generalizable) === #
 nfolds = 10
@@ -121,9 +148,9 @@ plt.plot(train_sizes, train_scores_mean, 'o-', color="r",
 plt.plot(train_sizes, test_scores_mean, 'o-', color="g",
          label="Cross-validation score")
 
-plt.gca().invert_yaxis()
 plt.ylabel('R2')
-
+plt.xlabel('Training examples')
+plt.ylim((-0.5, 1))
 plt.legend(loc="best")
 plt.show()
 
