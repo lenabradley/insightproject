@@ -37,33 +37,23 @@ for (k, v) in human_names.items():
 column_info = pd.DataFrame(column_info_dict).T
 column_info.index.rename('colname', inplace=True)
 
-# Collect list of terms (i.e. categorial dummies) for ...
+
+# Collect which terms (i.e. categorical dummies) are for each of these groups:
 #   (1) condition mesh terms
 #   (2) intervention mesh terms
 #   (3) intervention type
 #   (4) keywords
 #   (5) phase
-# ... also add T/F is_term to column metadata
-column_info['isterm'] = False
 prefixes = ['cond_', 'intv_', 'intvtype_', 'keyword_', 'phase'] # i.e. groups
-dict_of_terms = {}
 for p in prefixes:
     # Regex to check if prefix is at the begining of a string (i.e. column name)
     re_search_str = r'^{}'.format(p)
+    column_info['is_'+p] = False
 
-    # establish empty list of terms associated with this prefix/group
-    dict_of_terms[p] = []
-
-    # look at each column name
+    # look at each column name, if it matches the prefix, indicate that
     for n in column_info.index.tolist():
-
-        # If column matches the prefix, add its human-readable name to the list
-        # of terms
         if re.search(re_search_str, n) is not None:
-            dict_of_terms[p].append(column_info.loc[n,'name'])
-
-            # If this column is a term, indicate that in the column metadata
-            column_info.loc[n,'isterm'] = True
+            column_info.loc[n, 'is_'+p] = True
 
 
 # === MODEL: LINEAR REGRESSION + NORMALIZATION + TFORM Y + LASSO === #
@@ -203,6 +193,3 @@ filename = 'app_model1/column_info.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(column_info, output_file)
 
-filename = 'app_model1/dict_of_terms.pkl'
-with open(filename, 'wb') as output_file:
-    pk.dump(dict_of_terms, output_file)

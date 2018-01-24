@@ -44,9 +44,11 @@ df = pd.read_pickle('training_data.pkl')
 # ============
 
 
+N_unique = {}
+for c in df.columns.tolist():
+    N_unique[c] = len(df[c].unique())
 
-
-
+    print('{}\t{}'.format(N_unique[c], c))
 
 
 

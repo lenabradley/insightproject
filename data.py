@@ -99,11 +99,13 @@ def _gather_response():
     df = df[filt]
 
     # return limited dataframe
-    df = df[['enrolled', 'dropped']]
+    df.rename(columns={'COMPLETED': 'completed'}, inplace=True)
+    df = df[['enrolled', 'dropped', 'completed']]
 
     # human-readable names
     human_names = {'enrolled': 'number of participants enrolled',
-                   'enrolled': 'number participants dropped'}
+                   'dropped': 'number participants dropped',
+                   'completed': 'number of participants completed'}
 
     return (df, human_names)
 
@@ -420,8 +422,8 @@ def get_data(savename=None, dropna=True, N=10, fill_intelligent=True, savename_h
     """
 
     # Collect data (features & response, inner join)
-    (dfX, Xnames) = _gather_features(N=N, fill_intelligent=fill_intelligent)
     (dfY, Ynames) = _gather_response()
+    (dfX, Xnames) = _gather_features(N=N, fill_intelligent=fill_intelligent)
     df = dfY.join(dfX, how='inner').dropna(how='any')
 
     # human readable names
