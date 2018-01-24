@@ -14,6 +14,7 @@ import numpy as np
 import re
 from sklearn.model_selection import train_test_split
 import seaborn as sns
+import pickle as pk
 
 
 def _connectdb():
@@ -38,6 +39,7 @@ def _gather_response():
         df (DataFrame): Pandas dataframe with columns for study ID ('nct_id'), 
             number of participants enrolled ('enrolled') at the start, and the
             number that dropped out ('dropped')
+        human_names (dict): dictionary mapping columns to human-readable names
 
     Notes:
     - Only keep studies with valid (non-nan) data
@@ -98,7 +100,12 @@ def _gather_response():
 
     # return limited dataframe
     df = df[['enrolled', 'dropped']]
-    return df
+
+    # human-readable names
+    human_names = {'enrolled': 'number of participants enrolled',
+                   'enrolled': 'number participants dropped'}
+
+    return (df, human_names)
 
 
 def _gather_features(N=10, fill_intelligent=True):
@@ -113,6 +120,7 @@ def _gather_features(N=10, fill_intelligent=True):
 
     Return:
         df (DataFrame): pandas dataframe with full data
+        human_names (dict): dictionary mapping columns to human-readable names
 
     Notes:
     - filter for Completed & Inverventional studies only
@@ -180,12 +188,17 @@ def _gather_features(N=10, fill_intelligent=True):
     noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
     meas = meas[sexes].groupby('nct_id').sum()
 
+    # Convert to fraction male
+    meas['malefraction'] = meas['male']/(meas['female']+meas['male'])
+    meas.drop(columns=sexes, inplace=True)
+
     if fill_intelligent:
-        for s in sexes:
-            meas[s] = meas[s].astype(int)
+        meas['malefraction'] = meas['malefraction'].fillna(0.5).astype(float) # asumme 50/50 split
     else:
-        meas.loc[noinfo, sexes] = np.NaN
-    # ================ 
+        meas.loc[noinfo, 'malefraction'] = np.NaN
+
+    # human-readable names
+    meas_humannames = {'malefraction': 'fraction of males'}
 
     # ================ Gather condition MeSH terms from 'browse_conditions'
     colnames = {'nct_id': 'nct_id',
@@ -196,11 +209,20 @@ def _gather_features(N=10, fill_intelligent=True):
     conds['cond'] = conds['cond'].str.lower()
 
     # Limit to the to N terms & create dummy vars
-    topN_conds = conds['cond'].value_counts().head(N).index.tolist()
+    topN_conds = conds['cond'].value_counts().head(N).index.tolist()    
+
     conds['cond'] = [re.sub(r'[^a-z]', '', x) if x in topN_conds
                      else None for x in conds['cond']]
     conds = pd.get_dummies(conds).groupby('nct_id').any()
-    # ================
+
+    # human readable names
+    prefix = colnames['mesh_term']
+    topN_conds_colnames = []
+    for c in topN_conds:
+        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
+        topN_conds_colnames.append(dummyname)
+
+    conds_humannames = dict(zip(topN_conds_colnames, topN_conds))
 
     # ================ Gather intervention MeSH terms in 'browse_interventions'
     colnames = {'nct_id': 'nct_id',
@@ -215,8 +237,15 @@ def _gather_features(N=10, fill_intelligent=True):
     intv['intv'] = [re.sub(r'[^a-z]', '', x) if x in topN_intv 
                     else None for x in intv['intv']]
     intv = pd.get_dummies(intv).groupby('nct_id').any()
-    # ================ 
 
+    # human readable names
+    prefix = colnames['mesh_term']
+    topN_intv_colnames = []
+    for c in topN_intv:
+        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
+        topN_intv_colnames.append(dummyname)
+
+    intv_humannames = dict(zip(topN_intv_colnames, topN_intv))
 
     # ================ Gather various info from 'calculated_values'  
     colnames = {'nct_id': 'nct_id',
@@ -242,19 +271,25 @@ def _gather_features(N=10, fill_intelligent=True):
                                  calc['minimum_age_factor'])
 
     # only keep colums we need, & rename some
-    colnames = {'facilities': 'facilities',
+    colnames2 = {'facilities': 'facilities',
                 'year': 'year',
                 'duration': 'duration',
                 'usfacility': 'usfacility',
                 'minimum_age_years': 'minage'} # removing maxage - mostly empty not useful
-    calc = calc[list(colnames.keys())].rename(columns=colnames)
+    calc = calc[list(colnames2.keys())].rename(columns=colnames2)
     
     # Fill nans with best-guesses
     if fill_intelligent:
         calc['minage'] = calc['minage'].fillna(0).astype(int) # assume minage is 0
         calc['usfacility'] = calc['usfacility'].fillna(True) # assume yes it has US facility
         calc['facilities'] = calc['facilities'].fillna(1).astype(int) # assume 1 facility
-    # ================ 
+
+    # human-readable names
+    calc_humannames = {colnames2[colnames['number_of_facilities']]: 'number of facilities',
+                       colnames2[colnames['registered_in_calendar_year']]: 'calendar year trial started',
+                       colnames2[colnames['actual_duration']]: 'study duration (months)',
+                       colnames2[colnames['has_us_facility']]: 'at least one facility in the US',
+                       colnames2['minimum_age_years']: 'minimum age (years)' }
 
     # ================ Gather intervention type info from 'interventions' 
     colnames = {'nct_id': 'nct_id',
@@ -267,10 +302,20 @@ def _gather_features(N=10, fill_intelligent=True):
     intvtype = intvtype[~intvtype.index.duplicated(keep='first')]
 
     # convert to lowercase, remove non-alphabetic characters
+    topN_intvtype = intvtype['intvtype'].unique().tolist()
     intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x)
                             for x in intvtype['intvtype'].str.lower()]
     intvtype = pd.get_dummies(intvtype).groupby('nct_id').any()
-    # ================ 
+
+    # human-readable names
+    prefix = colnames['intervention_type']
+    topN_intvtype_colnames = []
+    for c in topN_intvtype:
+        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c.lower())
+        topN_intvtype_colnames.append(dummyname)
+
+    intvtype_humannames = dict(zip(topN_intvtype_colnames, topN_intvtype))
+
 
     # ================ Gather keywords info from 'keywords' (only keep top N)
     colnames = {'nct_id': 'nct_id',
@@ -285,7 +330,15 @@ def _gather_features(N=10, fill_intelligent=True):
     words['keyword'] = [re.sub(r'[^a-z]', '', x) if x in topN_words
                         else None for x in words['keyword']]
     words = pd.get_dummies(words).groupby('nct_id').any()
-    # ================ 
+
+    # human-readable names
+    prefix = colnames['name']
+    topN_words_colnames = []
+    for c in topN_words:
+        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
+        topN_words_colnames.append(dummyname)
+
+    words_humannames = dict(zip(topN_words_colnames, topN_words))
 
     # ================ Gather various info from 'studies' (filter for Completed & Inverventional studies only!)
     colnames = {'nct_id': 'nct_id',
@@ -311,34 +364,32 @@ def _gather_features(N=10, fill_intelligent=True):
 
     if fill_intelligent:
         studies['arms'] = studies['arms'].fillna(1).astype(int)
-    # ================ 
+
+    # human-readable names
+    studies_humannames = {colnames['number_of_arms']: 'number of study arms',
+                          'phase1': 'phase 1',
+                          'phase2': 'phase 2',
+                          'phase3': 'phase 3',
+                          'phase4': 'phase 4'}
 
     # ================ Combine all dataframes together!
-    # Note: left join all data onto 'studies' (so only keep data for completed, 
+    # Note: inner join all data onto 'studies' (so only keep data for completed, 
     # interventional studies)
-
-
-    # # ======= start DEBUGGING
-    # all_tables = [meas, conds, intv, calc, intvtype, words, studies]
-
-    # # Gather all study ids
-    # test = pd.concat([x.index.to_series() for x in all_tables])
-    # unique_ids = test.unique()
-
-    # # Find which IDs are in all tables
-    # ids_inall = []
-    # for id in unique_ids:
-    #     if all([id in x.index for x in all_tables]):
-    #         ids_inall.append(id)
-    # # ======= end DEBUGGING
 
     df = studies
     for d in [meas, conds, intv, calc, intvtype, words]:
         df = df.join(d, how='inner')
 
+    # join all human-readable names
+    human_names = {**studies_humannames,
+            **meas_humannames,
+            **conds_humannames,
+            **intv_humannames,
+            **calc_humannames,
+            **intvtype_humannames,
+            **words_humannames}
 
-
-    return df
+    return (df, human_names)
 
 
 def remove_highdrops(df, thresh=1.0):
@@ -348,7 +399,7 @@ def remove_highdrops(df, thresh=1.0):
     return df[df['dropped'] < df['enrolled']*thresh]
 
 
-def get_data(savename=None, dropna=True, N=10, fill_intelligent=True):
+def get_data(savename=None, dropna=True, N=10, fill_intelligent=True, savename_human=None):
     """ Connect to AACT database and gather data of interest
 
     Kwargs:
@@ -360,15 +411,21 @@ def get_data(savename=None, dropna=True, N=10, fill_intelligent=True):
             strings as features (dummies). Default is 10
         fill_intelligent (bool): If True, fill empty/null/NaNs features with
             best-guess values. If False, leave as NaNs. Default is True
+        savename_human (string): If not None, save the resulting human_names 
+            dict via pickle
 
     Return:
         df (DataFrame): Pandas DataFrame with data features and responses
+        human_names (dict): dictionary mapping columns to human-readable names        
     """
 
     # Collect data (features & response, inner join)
-    dfX = _gather_features(N=N, fill_intelligent=fill_intelligent)
-    dfY = _gather_response()
+    (dfX, Xnames) = _gather_features(N=N, fill_intelligent=fill_intelligent)
+    (dfY, Ynames) = _gather_response()
     df = dfY.join(dfX, how='inner').dropna(how='any')
+
+    # human readable names
+    human_names = {**Xnames, **Ynames}
 
     # Remove 100% dropouts
     df = remove_highdrops(df)
@@ -377,13 +434,18 @@ def get_data(savename=None, dropna=True, N=10, fill_intelligent=True):
     for c in df.columns.tolist():
         if len(df[c].unique()) < 2:
             df.drop(columns=c, inplace=True)
+            del human_names[c]
 
-    # Save
+    # Save dataframe & human_names
     if savename is not None:
         df.to_pickle(savename)
 
+    if savename_human is not None:
+        with open(savename_human, 'wb') as output_file:
+            pk.dump(human_names, output_file)
+
     # Return
-    return df
+    return (df, human_names)
 
 
 def split_data(df, save_suffix=None, test_size=None):
