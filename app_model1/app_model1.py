@@ -2,7 +2,7 @@
 # 
 import pickle as pk
 import pandas as pd
-# from math import ceil
+from math import ceil
 import dash
 from dash.dependencies import Input, Output
 import dash_core_components as dcc
@@ -43,55 +43,76 @@ with open(filename, 'rb') as input_file:
 
 # ================= SETUP CATEGORICAL OPTIONS LIST
 
+def get_options_list(column_info, cat_column):
+    filt = column_info[cat_column]
+    label_names = column_info[filt]['name'].tolist()
+    label_vals = column_info[filt].index.tolist()
+    options = []
+    for (n, v) in zip(label_names, label_vals):
+        options.append({'label': n, 'value': v})
+    return options
+
 # (1) Conditions
-filt = column_info['is_cond_']
-label_names = column_info[filt]['name'].tolist()
-label_vals = column_info[filt].index.tolist()
-cond_options = []
-for (n, v) in zip(label_names, label_vals):
-    cond_options.append({'label': n, 'value': v})
+cond_options = get_options_list(column_info, 'is_cond_')
 
 # (2) Interventions
-filt = column_info['is_intv_']
-label_names = column_info[filt]['name'].tolist()
-label_vals = column_info[filt].index.tolist()
-intv_options = []
-for (n, v) in zip(label_names, label_vals):
-    intv_options.append({'label': n, 'value': v})
+intv_options = get_options_list(column_info, 'is_intv_')
 
 # (3) Intervention types
-filt = column_info['is_intvtype_']
-label_names = column_info[filt]['name'].tolist()
-label_vals = column_info[filt].index.tolist()
-intvtype_options = []
-for (n, v) in zip(label_names, label_vals):
-    intvtype_options.append({'label': n, 'value': v})
+intvtype_options = get_options_list(column_info, 'is_intvtype_')
 
 # (4) Keywords
-filt = column_info['is_keyword_']
-label_names = column_info[filt]['name'].tolist()
-label_vals = column_info[filt].index.tolist()
-keyword_options = []
-for (n, v) in zip(label_names, label_vals):
-    keyword_options.append({'label': n, 'value': v})
+keyword_options = get_options_list(column_info, 'is_keyword_')
 
 # (5) Phase
-filt = column_info['is_phase']
-label_names = column_info[filt]['name'].tolist()
-label_vals = column_info[filt].index.tolist()
-phase_options = []
-for (n, v) in zip(label_names, label_vals):
-    phase_options.append({'label': n, 'value': v})
+phase_options = get_options_list(column_info, 'is_phase')
 
 
 # ================== SETUP DEFAULT DATA (DICT)
 
 userdata = dict(**Xraw.iloc[0], **yraw.iloc[0])
 
-# force start year to be 2018
-userdata['year'] = 2018
+# set userdata to initial values
 
+# - set all categoricals to False
+cat_names = column_info.loc[column_info['categorical']].index.tolist()
+for n in cat_names:
+    userdata[n] = False
 
+# - set as Phase 1 & Drug
+userdata['phase1'] = True
+userdata['intvtype_drug'] = True
+
+# - set continuous/numerics
+userdata['year'] = 2018 # force start year to be 2018
+userdata['malefraction'] = 0.5 # - 50/50 male/female
+userdata['arms'] = 1 # - 1 arm
+userdata['duration'] = 12*5 # 5 year study
+userdata['minage'] = 18 # minimum age 18
+
+# ================== GET CURRENT CATEGORICAL CHOICES/VALUE SETS
+def get_value_list(userdata, column_info, cat_column):
+    colnames = column_info[column_info[cat_column]].index.tolist()
+    values = []
+    for c in colnames:
+        if userdata[c]:
+            values.append(c)
+    return values
+
+# (1) Conditions
+cond_values = get_value_list(userdata, column_info, 'is_cond_')
+
+# (2) Interventions
+intv_values = get_value_list(userdata, column_info, 'is_intv_')
+
+# (3) Intervention types
+intvtype_value = get_value_list(userdata, column_info, 'is_intvtype_')[0]
+
+# (4) Keywords
+keyword_values = get_value_list(userdata, column_info, 'is_keyword_')
+
+# (5) Phase
+phase_values = get_value_list(userdata, column_info, 'is_phase')
 
 
 #  =================  BUILD DASH APP LAYOUT
@@ -122,15 +143,55 @@ app.layout = html.Div(children=[
                 type='text',
                 id='participants_text')]),
 
+        # Fraction M/F
+        html.Div(children=[
+            html.Label('Percent of participants that are male: (100*#Male/#Total)'),
+            dcc.Input(
+                value='{}'.format(int(userdata['malefraction']*100)),
+                type='text',
+                id='malefraction_text')]),
+
+        # Minimum age
+        html.Div(children=[
+            html.Label('Minimum age of participants (years)'),
+            dcc.Input(
+                value='{}'.format(userdata['minage']),
+                type='text',
+                id='minage_text')]),        
+
+        # Phase
+        html.Div(children=[
+            html.Label('Phase'),
+            dcc.Checklist(
+                options=phase_options,
+                values=phase_values,
+                id='phase_checklist')]),
+
         # Intervention Class
         html.Div(children=[
             html.Label('Intervention class (select one)'),
             dcc.Dropdown(
                 options=intvtype_options,
-                value=[],
-                multi=False)],
+                searchable=False,
+                value=intvtype_value,
+                multi=False,
+                id='intvtype_dropdown')],
             className='five columns',
             style={'width': '100%', 'margin-left': 0, 'margin-top': 20, 'margin-bottom': 20}),
+
+        # number of arms
+        html.Div(children=[
+            html.Label('Number of study arms',
+                style={'margin-top': 20, 'margin-bottom':-20}),
+            html.Div(
+                children=[],
+                id='report_arms',
+                style={'text-align':'right'}),        
+            dcc.Slider(
+                min=0, max=20, step=1,
+                marks={i: ' ' if i%5 else '{}'.format(int(i)) for i in range(0, 20+1)},
+                value=userdata['arms'],
+                id='arms_slider')]),
 
         # duration
         html.Div(children=[
@@ -174,8 +235,10 @@ app.layout = html.Div(children=[
             html.Label('Conditions (Select all that apply)'),
             dcc.Dropdown(
                 options=cond_options,
-                value=[],
-                multi=True)],
+                placeholder='Search for terms...',
+                value=cond_values,
+                multi=True,
+                id='cond_dropdown')],
             className='five columns',
             style={'width': '100%', 'margin': 0, 'margin-top': 0}),
 
@@ -184,23 +247,24 @@ app.layout = html.Div(children=[
             html.Label('Interventions (Select all that apply)'),
             dcc.Dropdown(
                 options=intv_options,
-                value=[],
-                multi=True)],
+                placeholder='Search for terms...',
+                value=intv_values,
+                multi=True,
+                id='intv_dropdown')],
             className='five columns',
-            style={'width': '100%', 'margin': 0, 'margin-top': 20, 'margin-bottom': 20}),
+            style={'width': '100%', 'margin': 0, 'margin-top': 20}),
 
-        # # start_year
-        # html.Div(children=[
-        #     html.Label('Year trial will start',
-        #         style={'margin-bottom':-20}),
-        #     html.Div(children=[],
-        #         id='report_start_year',
-        #         style={'text-align':'right'}),        
-        #     dcc.Slider(
-        #         min=2000, max=2018, step=1,
-        #         marks={i: ' ' if i%5 else '{}'.format(i) for i in range(2000, 2018+1)},
-        #         value=userdata['year'],
-        #         id='start_year_slider')]),
+        # Keywords
+        html.Div(children=[
+            html.Label('Keywords (Select all that apply)'),
+            dcc.Dropdown(
+                options=keyword_options,
+                placeholder='Search for terms...',
+                value=keyword_values,
+                multi=True,
+                id='keyword_dropdown')],
+            className='five columns',
+            style={'width': '100%', 'margin': 0, 'margin-top': 20, 'margin-bottom': 20}),        
 
         ],
         className='five columns'
@@ -208,24 +272,19 @@ app.layout = html.Div(children=[
 
 
     # ==== Report dropout rate prediction (5 cols)
+    # Predictions title
     html.Div(children=[
         html.H3('Your predictions:')
         ],
         className='five columns'),
 
+    # Predictions box
     html.Div(children=[
-        html.H3(id='pred_report'),
-        html.Ul(children=[html.Li(id='pred_report_CI')]),
-        html.H3('Influenctial factors:'),
-        html.Ul(children=[
-            html.Li(id='pred_bullet_1'),
-            html.Li(id='pred_bullet_2')]),
-        html.H3(id='pred_enrollment'),
-        html.Ul(children=[
-            html.Li('95% confident')]),
-        ],
+        html.H5(),
+        html.H5()],
+        id='pred_report',
         className='five columns',
-        style={'background-color':'#F89BA7', 'padding':'10px'}),
+        style={'background-color':'#F89BA7', 'padding': '10px'}),
 
 
     # ==== DATA PLACEHOLDERS
@@ -235,55 +294,117 @@ app.layout = html.Div(children=[
         id='data_holder')
 
 ],
-style={'margins':'auto'}
+style={'margins': 'auto'}
 )
 
 # ================= APP CALLBACKS
 
 
-# # When userdata changes, update the prediction
-# @app.callback(
-#     Output('', ''),
-#     [Input('data_holder', 'children')]
-#     )
-# def update_predictions(json_userdata):
-#     return json_userdata
+# When userdata changes, update the prediction
+@app.callback(
+    Output('pred_report', 'children'),
+    [Input('data_holder', 'children')]
+    )
+def update_predictions(json_userdata, reg=reg, Xraw=Xraw):
 
+    # De-serialize data
+    userdata = dict(loads(json_userdata))
+    del userdata['droprate']
 
+    # Format data to array for model input
+    newXraw = Xraw.iloc[:0]
+    newXraw = newXraw.append(userdata, ignore_index=True)
+    newX = newXraw.as_matrix()
+
+    # Predict dropout rate & create associated string
+    pred_droprate = reg.predict(newX)[0]**3
+    pred_droprate_str = 'Predicted dropout rate: {}% '.format(int(round(pred_droprate*100)))
+
+    # Calculate suggested enrollment
+    pred_enroll = userdata['completed'] / (1-pred_droprate)
+    pred_enroll_str = 'Plan to enroll {:d} participants'.format(ceil(pred_enroll))
+
+    # Format callback output/children
+    children = [html.H5(pred_droprate_str),
+                html.H5(pred_enroll_str)]
+
+    return children
 
 # If any input vars change, update the json-tricks serialized user data
 @app.callback(
     Output('data_holder', 'children'),
-    [Input('participants_text', 'children'),
+    [Input('participants_text', 'value'),
+     Input('malefraction_text', 'value'),
+     Input('minage_text', 'value'),
      Input('duration_slider', 'value'),
+     Input('arms_slider', 'value'),
      Input('num_facilities_slider', 'value'),
-     Input('has_us_facility_radio', 'value')])
-def update_userdata(participants_text, duration_slider, num_facilities_slider,
-    has_us_facility_radio, userdata):
+     Input('has_us_facility_radio', 'value'),
+     Input('intvtype_dropdown', 'value'),
+     Input('cond_dropdown', 'value'),
+     Input('intv_dropdown', 'value'),
+     Input('phase_checklist', 'values'),
+     Input('keyword_dropdown', 'value')])
+def update_userdata(participants_text, malefraction_text, minage_text,
+    duration_slider, arms_slider, num_facilities_slider,
+    has_us_facility_radio, intvtype_dropdown, cond_dropdown, intv_dropdown,
+    phase_checklist, keyword_dropdown,
+    userdata=userdata, column_info=column_info):
 
     # Modify user data
     userdata['completed'] = int(participants_text)
+    userdata['malefraction'] = int(malefraction_text)/100.
+    userdata['minage'] = float(minage_text)
     userdata['duration'] = duration_slider
+    userdata['arms'] = int(arms_slider)
     userdata['facilities'] = num_facilities_slider
     userdata['usfacility'] = has_us_facility_radio
+
+    # Set intervention class options as T/F according to selected
+    intvtype_names = column_info[column_info['is_intvtype_']].index.tolist()
+    for n in intvtype_names:
+        userdata[n] = False
+        if intvtype_dropdown is not None:
+            if n in intvtype_dropdown:
+                userdata[n] = True
+
+    # Set condition MeSh terms options as T/F according to selected
+    cond_names = column_info[column_info['is_cond_']].index.tolist()
+    for n in cond_names:
+        userdata[n] = False
+        if cond_dropdown is not None:
+            if n in cond_dropdown:
+                userdata[n] = True
+
+    # Set intervention MeSh terms options as T/F according to selected
+    intv_names = column_info[column_info['is_intv_']].index.tolist()
+    for n in intv_names:
+        userdata[n] = False
+        if intv_dropdown is not None:
+            if n in intv_dropdown:
+                userdata[n] = True
+
+    # Set phase as T/F according to selected
+    phase_names = column_info[column_info['is_phase']].index.tolist()
+    for n in phase_names:
+        userdata[n] = False
+        if phase_checklist is not None:
+            if n in phase_checklist:
+                userdata[n] = True
+
+    # Set keywords T/F according to selected
+    keyword_names = column_info[column_info['is_keyword_']].index.tolist()
+    for n in keyword_names:
+        userdata[n] = False
+        if keyword_dropdown is not None:
+            if n in keyword_dropdown:
+                userdata[n] = True                
 
     # Return json serialzed userdata
     return dumps(userdata)
 
 
-
-
-
-# # === If start_year_slider changes, udpdate report_start_year
-# @app.callback(
-#     Output('report_start_year', 'children'),
-#     [Input('start_year_slider', 'value')]
-#     )
-# def update_report(input_value):
-#     yearstr = 'Selected: {}'.format(input_value)
-#     return yearstr
-
-# === If duration_slider changes, udpdate report_duration
+# If duration_slider changes, udpdate report_duration
 @app.callback(
     Output('report_duration', 'children'),
     [Input('duration_slider', 'value')]
@@ -293,8 +414,16 @@ def update_report(input_value):
     return outstr
 
 
+# If arms_slider changes, udpdate report_duration
+@app.callback(
+    Output('report_arms', 'children'),
+    [Input('arms_slider', 'value')]
+    )
+def update_report(input_value):
+    outstr = 'Selected: {}'.format(int(input_value))
+    return outstr    
 
-# === If num_facilities_slider changes, udpdate report_num_facilities
+# If num_facilities_slider changes, udpdate report_num_facilities
 @app.callback(
     Output('report_num_facilities', 'children'),
     [Input('num_facilities_slider', 'value')]
@@ -304,120 +433,7 @@ def update_report(input_value):
     return outstr
 
 
-# # If any parameters change, update the prediction
-# @app.callback(
-#     Output('pred_report', 'children'),
-#     [Input('enrolled_text','value'),
-#      Input('start_year_slider', 'value'),
-#      Input('duration_slider', 'value'),
-#      Input('num_facilities_slider', 'value'),
-#      Input('has_us_facility_radio', 'value'),
-#      Input('is_cancer_radio', 'value')])
-# def update_prediction(enrolled_text, start_year, duration, num_facilities, 
-#     has_us_facility, is_cancer, currdata=currdata):
-#     # set features
-#     currdata.iat[0, currdata.columns.get_loc('enrolled')] = int(enrolled_text)
-#     currdata.iat[0, currdata.columns.get_loc('start_year')] = start_year
-#     currdata.iat[0, currdata.columns.get_loc('duration')] = duration*12
-#     currdata.iat[0, currdata.columns.get_loc('num_facilities')] = num_facilities
-#     currdata.iat[0, currdata.columns.get_loc('has_us_facility')] = has_us_facility
-#     currdata.iat[0, currdata.columns.get_loc('is_cancer')] = is_cancer
-
-#     # update prediction
-#     pred = res.get_prediction(currdata)
-
-#     # Predition report string
-#     predm = int(pred.predicted_mean[0]*100)
-#     pred_str = 'Dropout rate: {:d}% '.format(predm)
-#     return pred_str
-
-# # If any parameters change, update the prediction CI
-# @app.callback(
-#     Output('pred_report_CI', 'children'),
-#     [Input('enrolled_text','value'),
-#      Input('start_year_slider', 'value'),
-#      Input('duration_slider', 'value'),
-#      Input('num_facilities_slider', 'value'),
-#      Input('has_us_facility_radio', 'value'),
-#      Input('is_cancer_radio', 'value')])
-# def update_prediction(enrolled_text, start_year, duration, num_facilities, 
-#     has_us_facility, is_cancer, currdata=currdata):
-#     # set features
-#     currdata.iat[0, currdata.columns.get_loc('enrolled')] = int(enrolled_text)
-#     currdata.iat[0, currdata.columns.get_loc('start_year')] = start_year
-#     currdata.iat[0, currdata.columns.get_loc('duration')] = duration*12
-#     currdata.iat[0, currdata.columns.get_loc('num_facilities')] = num_facilities
-#     currdata.iat[0, currdata.columns.get_loc('has_us_facility')] = has_us_facility
-#     currdata.iat[0, currdata.columns.get_loc('is_cancer')] = is_cancer
-    
-#     # update prediction
-#     pred = res.get_prediction(currdata)
-
-#     # Predition report string
-#     predl, predu = [int(x*100) for x in pred.conf_int()[0]]
-#     pred_str_CI = '95% confidence interval: {:d}-{:d}%'.format(predl, predu)
-#     return pred_str_CI  
-
-# # If any parameters change, update the bullet points (#1)
-# @app.callback(
-#     Output(component_id='pred_bullet_1', component_property='children'),
-#     [Input('start_year_slider', 'value'),
-#      Input('duration_slider', 'value'),
-#      Input('is_cancer_radio', 'value')])
-# def update_prediction(start_year, is_cancer, currdata=currdata):
-#     # factors that are (1) most significant and (2) largest effect size
-#     factor_mostsig = res.pvalues.drop('Intercept').idxmin()
-
-#     bullet_str_1 = 'The most significant factor is "{}"'.format(factor_mostsig)
-#     return bullet_str_1
-
-# # If any parameters change, update the bullet points (#2)
-# @app.callback(
-#     Output(component_id='pred_bullet_2', component_property='children'),
-#     [Input('start_year_slider', 'value'),
-#      Input('duration_slider', 'value'),
-#      Input('is_cancer_radio', 'value')])
-# def update_prediction(start_year, is_cancer, currdata=currdata):
-#     # factors that are (1) most significant and (2) largest effect size
-#     factor_biggest = res.params.drop('Intercept').idxmax()
-
-#     bullet_str_2 = 'The dropout rate is increased the most due to "{}"'.format(factor_biggest)
-#     return bullet_str_2
-
-# # If any parameters change, update the estimated enrollment
-# @app.callback(
-#     Output('pred_enrollment', 'children'),
-#     [Input('enrolled_text','value'),
-#      Input('start_year_slider', 'value'),
-#      Input('duration_slider', 'value'),
-#      Input('num_facilities_slider', 'value'),
-#      Input('has_us_facility_radio', 'value'),
-#      Input('is_cancer_radio', 'value')])
-# def update_prediction(enrolled_text, start_year, duration, num_facilities, 
-#     has_us_facility, is_cancer, currdata=currdata):
-#     # set features
-#     currdata.iat[0, currdata.columns.get_loc('enrolled')] = int(enrolled_text)
-#     currdata.iat[0, currdata.columns.get_loc('start_year')] = start_year
-#     currdata.iat[0, currdata.columns.get_loc('duration')] = duration*12
-#     currdata.iat[0, currdata.columns.get_loc('num_facilities')] = num_facilities
-#     currdata.iat[0, currdata.columns.get_loc('has_us_facility')] = has_us_facility
-#     currdata.iat[0, currdata.columns.get_loc('is_cancer')] = is_cancer
-
-#     # update prediction
-#     pred = res.get_prediction(currdata)
-
-#     # Predited dropout rate
-#     predm = pred.predicted_mean[0]
-#     predl, predu = [x for x in pred.conf_int()[0]]
-
-#     # Adjusted enrollment numbers
-#     want = currdata.iat[0, currdata.columns.get_loc('enrolled')]
-#     need = ceil(want / (1-predu))
-
-#     pred_str = 'Plan to enroll {:d} participants'.format(need)
-#     return pred_str
-
-
+# MAIN
 if __name__ == '__main__':
     app.run_server(debug=True)
 
