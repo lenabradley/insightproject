@@ -296,6 +296,17 @@ plt.ylim((0, 1))
 plt.legend(loc="best")
 plt.show()
 
+
+# ===============================================================
+# COMPUTE TEST SET SCORE - RF
+# ===============================================================
+
+# MODEL
+filename = 'app_model1/reg_model2.pkl'
+with open(filename, 'wb') as output_file:
+    pk.dump(reg, output_file)
+
+
 # ===============================================================
 # COMPUTE TEST SET SCORE - RF
 # ===============================================================

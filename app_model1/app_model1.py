@@ -36,7 +36,8 @@ with open('column_info.pkl', 'rb') as input_file:
 column_info['name'] = [x.capitalize() for x in column_info['name']]
 
 # MODEL
-filename = 'reg_model1.pkl'
+# filename = 'reg_model1.pkl'
+filename = 'reg_model2.pkl'
 with open(filename, 'rb') as input_file:
     reg = pk.load(input_file)
 
@@ -123,16 +124,16 @@ app.layout = html.Div(children=[
 
     # ==== Title (10 cols)
     html.Div(children=[
-        html.H1(children="Let's Get Clinical!"),
-        html.H5(children='Lena Bartell',
-                style={'font-style': 'italic'})],
+        html.H1(children="Let's Get Clinical!", style={}),
+        html.Hr()],
         id='title_block',
         style={'text-align': 'center'},
         className='twelve columns'),
 
     # ==== User set parameters (5 cols)
     html.Div(children=[
-        html.H3('Enter details about your trial:'),
+        html.H3('Enter details about your trial',
+            style={'text-align': 'center'}),
 
         # Number of participants you need
         html.Div(children=[
@@ -144,7 +145,7 @@ app.layout = html.Div(children=[
 
         # Fraction M/F
         html.Div(children=[
-            html.Label('Percent of participants that are male: (100*#Male/#Total)'),
+            html.Label('Percent of participants that are male'),
             dcc.Input(
                 value='{}'.format(int(userdata['malefraction']*100)),
                 type='text',
@@ -266,24 +267,38 @@ app.layout = html.Div(children=[
             style={'width': '100%', 'margin': 0, 'margin-top': 20, 'margin-bottom': 20}),        
 
         ],
-        className='five columns'
+        className='six columns',
+        style={'background-color':'LightGray', 'padding': '20px'}
         ),
 
 
     # ==== Report dropout rate prediction (5 cols)
     # Predictions title
     html.Div(children=[
-        html.H3('Your predictions:')
+        html.H3('Your predictions', style={'text-align': 'center'}),
+        html.Div(children=[html.H5()],
+            id='pred_report')
         ],
-        className='five columns'),
-
-    # Predictions box
-    html.Div(children=[
-        html.H5(),
-        html.H5()],
-        id='pred_report',
         className='five columns',
-        style={'background-color':'#F89BA7', 'padding': '10px'}),
+        style={'background-color':'#fdc086', 'padding': '20px'}),
+
+    # # Predictions box
+    # html.Div(children=[
+    #     html.H5(),
+    #     html.H5()],
+    #     id='pred_report',
+    #     className='five columns',
+    #     style={'background-color':'#fed9a6', 'padding': '10px'}),
+
+
+    # ==== Footer
+    html.Div(children=[
+            html.Hr(),
+            html.H5(children='Lena Bartell',
+                style={'font-style': 'italic'}),
+            html.H1(' ')],
+        className='twelve columns',
+        style={'text-align': 'center', 'padding': '50'}),
 
 
     # ==== DATA PLACEHOLDERS
@@ -316,16 +331,16 @@ def update_predictions(json_userdata, reg=reg, Xraw=Xraw):
     newX = newXraw.as_matrix()
 
     # Predict dropout rate & create associated string
-    pred_droprate = reg.predict(newX)[0]**3
-    pred_droprate_str = 'Predicted dropout rate: {}% '.format(int(round(pred_droprate*100)))
-
-    # Calculate suggested enrollment
+    pred_droprate = reg.predict(newX)[0]
     pred_enroll = userdata['completed'] / (1-pred_droprate)
-    pred_enroll_str = 'Plan to enroll {:d} participants'.format(ceil(pred_enroll))
+    pred_droprate_str = ('Your predicted dropout rate is {}%, so you should ' + 
+        'plan to enroll {:d} participants ').format(
+        int(round(pred_droprate*100)),
+        ceil(pred_enroll)
+        )
 
     # Format callback output/children
-    children = [html.H5(pred_droprate_str),
-                html.H5(pred_enroll_str)]
+    children = [html.H5(pred_droprate_str)]
 
     return children
 
