@@ -9,9 +9,12 @@ import pickle as pk
 import pandas as pd
 import re
 import numpy as np
+import seaborn as sns
 
 
-# === GET DATA === #
+# ===============================================================
+# GET/MAKE DATA AND METADATA
+# ===============================================================
 (Xraw, yraw, human_names) = model1.getmodeldata(getnew=False)
 
 feature_names = Xraw.columns.tolist()
@@ -22,8 +25,7 @@ y = yraw[response_names[0]].as_matrix()
 ytform = y**(1/3)
 
 
-# === GET FEATURE METADAA ===#
-
+# === Feature metadata
 # Establish dataframe with column metadata, including (1) if it is continuous 
 # and (2) it's human-readable name
 column_info_dict = {}
@@ -56,23 +58,28 @@ for p in prefixes:
             column_info.loc[n, 'is_'+p] = True
 
 
-# === MODEL: LINEAR REGRESSION + NORMALIZATION + TFORM Y + LASSO === #
+# ===============================================================
+# LINEAR MODEL (LASSO + TFORM Y + NORMALIZATION)
+# ===============================================================
+
+# === Initialize model
 reg = linear_model.Lasso(normalize=True)
-reg.fit(X, ytform)
-ypred = reg.predict(X)
 
-# === PRINT OUTPUTS === #
-print('\n ** Linear regression + normalization + transform y + LASSO')
-print('Non-zero coefficients:')
-for (c,f) in sorted(zip(reg.coef_, feature_names)):
-    if abs(c) > 0:
-        print('{:+0.2f}\t{}'.format(c, f))
+# reg.fit(X, ytform)
+# ypred = reg.predict(X)
 
-print("RMS error: {:.2f}".format(mean_squared_error(ytform, ypred)**(1/2)))
-print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))
+# # === PRINT OUTPUTS === #
+# print('\n ** Linear regression + normalization + transform y + LASSO')
+# print('Non-zero coefficients:')
+# for (c,f) in sorted(zip(reg.coef_, feature_names)):
+#     if abs(c) > 0:
+#         print('{:+0.2f}\t{}'.format(c, f))
+
+# print("RMS error: {:.2f}".format(mean_squared_error(ytform, ypred)**(1/2)))
+# print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))
 
 
-# === MODEL: CV GRID SEARCH for hyperparameters === #
+# === CV grid search for hyperparameters 
 clf = GridSearchCV(reg, 
              param_grid={'alpha': [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]},
              scoring=make_scorer(r2_score))
@@ -84,17 +91,16 @@ stds = clf.cv_results_['std_test_score']
 for mean, std, params in zip(means, stds, clf.cv_results_['params']):
     print("  %0.3f (+/-%0.03f) for %r"
           % (mean, std * 2, params))
-
-best_alpha = clf.best_params_['alpha']
-
+best_params = clf.best_params_
 
 
-# === MODEL: REFIT WITH BEST ALPHA === #
-reg = linear_model.Lasso(alpha=best_alpha, normalize=True)
+# === Fit with best alpha
+reg = linear_model.Lasso(**best_params, normalize=True)
 reg.fit(X, ytform)
 ypred = reg.predict(X)
 
-# === PRINT OUTPUTS === #
+
+# === Print output
 print('\n ** Linear regression + normalization + transform y + LASSO')
 print('Non-zero coefficients:')
 for (c,f) in sorted(zip(reg.coef_, feature_names)):
@@ -105,7 +111,26 @@ print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))
 
 
 
-# === MODEL: K-FOLD CROSS VALIDATION (i.e. check generalizable) === #
+
+indices = np.argsort(np.abs(reg.coef_))[::-1]
+ranked_coefs = reg.coef_[indices]
+ranked_names = [column_info.loc[feature_names[j], 'name'] for j in indices]
+
+print(' ')
+print('Coefficients by effect size:')
+for (c,f) in zip(ranked_coefs, ranked_names):
+    if abs(c) > 1e-4:
+        print('{:+0.2f}\t{}'.format(c, f))
+
+
+
+for (c, f) in sorted(zip(reg.coef_, feature_names)):
+    if abs(c) > 1e-4:
+        print('{:+0.2f}\t{}'.format(c, f))
+
+
+
+# === MODEL: K-FOLD CROSS VALIDATION (i.e. check generalizable) 
 nfolds = 10
 CV_scores = cross_val_score(reg, X, ytform,
                             cv=nfolds, 
@@ -114,12 +139,10 @@ print('{:d}-fold CV R2 score: {:0.2f}+/-{:0.2f}'
       .format(nfolds, CV_scores.mean(), CV_scores.std()))
 
 
-
-# === MODEL: LEARNING CURVES === #
+# === Plot learning curves
 
 train_sizes, train_scores, test_scores = \
-    learning_curve(reg, X, ytform, 
-                   cv=None, scoring=make_scorer(r2_score))
+    learning_curve(reg, X, ytform, cv=None, scoring=make_scorer(r2_score))
 
 train_scores_mean = np.mean(train_scores, axis=1)
 train_scores_std = np.std(train_scores, axis=1)
@@ -127,7 +150,6 @@ test_scores_mean = np.mean(test_scores, axis=1)
 test_scores_std = np.std(test_scores, axis=1)
 
 plt.grid()
-
 plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
                  train_scores_mean + train_scores_std, alpha=0.1,
                  color="r")
@@ -137,7 +159,6 @@ plt.plot(train_sizes, train_scores_mean, 'o-', color="r",
          label="Training score")
 plt.plot(train_sizes, test_scores_mean, 'o-', color="g",
          label="Cross-validation score")
-
 plt.ylabel('R2')
 plt.xlabel('Training examples')
 plt.ylim((-0.5, 1))
@@ -145,20 +166,51 @@ plt.legend(loc="best")
 plt.show()
 
 
-# === PLOT RESIDUALS === #
+# === PLOT RESIDUALS 
 
-# hist of residuals
-plt.figure(figsize=(10, 5))
+sns.set(font_scale=1.5, style='white')
+ypred = reg.predict(X)
+
+fig = plt.figure(figsize=(10, 5))
+
+# hist of resids
 plt.subplot(1, 2, 1)
-plt.hist(ytform - ypred, bins=50, orientation='horizontal')
-plt.ylabel('residual')
+sns.distplot(ytform-ypred, bins=50, kde=False, vertical=True)
+sns.despine(fig=fig, bottom=True, left=True)
+plt.xticks([])
+plt.ylabel('Residuals')
+plt.ylim((-0.6, 0.6))
 
 # residuals vs predicted
 plt.subplot(1, 2, 2)
-plt.plot(ypred, ytform - ypred, '.')
+sns.regplot(ypred, ytform-ypred, fit_reg=False, scatter_kws={'alpha': 0.2})
+plt.ylim((-0.6, 0.6))
+sns.despine()
 plt.xlabel('predicted')
-plt.ylabel('residual')
 plt.show()
+
+
+
+# === CALCULATE TEST SET SCORE
+
+feature_names = Xraw.columns.tolist()
+# response_names = yraw.columns.tolist()
+response_names = ['dropped', 'enrolled']
+
+dftest = pd.read_pickle('testing_data.pkl')
+Xtest_raw = dftest[feature_names]
+ytest_raw = dftest[response_names]
+ytest_raw['droprate'] = ytest_raw['dropped']/ytest_raw['enrolled']
+
+Xtest = Xtest_raw.as_matrix()
+ytest = ytest_raw[['droprate']].as_matrix()
+
+
+r2_test = reg.score(Xtest, ytest**(1/3))
+
+print(r2_test)
+
+
 
 # === SAVE DATA & MODEL & METADATA VIA PICKEL === #
 
