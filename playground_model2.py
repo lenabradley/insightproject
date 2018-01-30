@@ -11,8 +11,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 from sklearn.tree import DecisionTreeRegressor
-
-
+from skgarden import RandomForestQuantileRegressor
 
 # ===============================================================
 # GET DATA AND METADATA
@@ -156,18 +155,20 @@ print('R2 test score:', r2_test)
 
 
 # ===============================================================
-# RANDOM FORREST REGRESSOR
+# RANDOM FOREST REGRESSOR
 # ===============================================================
 
-# setup random forrrest
+# === SETUP RANDOM FOREST
 reg = RandomForestRegressor()
 nfolds = 10
 
+
 # === GRID SEARCH FOR HYPERPARAMETERS
 clf = GridSearchCV(reg, 
-             param_grid={'n_estimators': [50, 100],
-                         'max_depth': [10, 50],
-                         'max_features': [None]},
+             param_grid={'n_estimators': [100, 1000],
+                         'max_depth': [10],
+                         'max_features': [None],
+                         'min_samples_leaf': [5]},
              scoring=make_scorer(r2_score), cv=nfolds)
 clf.fit(X, y)
 
@@ -182,9 +183,8 @@ best_params = clf.best_params_
 print("Best hyperparameters: {}".format(best_params))
 
 
-
 # === FIT RF-REGRESSION WITH BEST PARAMS
-best_params = {'n_estimators':100, 'max_depth':10}
+best_params = {'n_estimators': 100, 'max_depth': 10, 'min_samples_leaf': 5}
 
 reg = RandomForestRegressor(**best_params)
 reg.fit(X, y)
@@ -270,7 +270,7 @@ plt.show()
 # === LEARNING CURVES 
 train_sizes, train_scores, test_scores = \
     learning_curve(reg, X, y,
-                   cv=None, scoring=make_scorer(r2_score))
+                   cv=nfolds, scoring=make_scorer(r2_score))
 
 train_scores_mean = np.mean(train_scores, axis=1)
 train_scores_std = np.std(train_scores, axis=1)
@@ -298,13 +298,43 @@ plt.show()
 
 
 # ===============================================================
-# COMPUTE TEST SET SCORE - RF
+# RF QUANTILE REGRESSOR
+# ===============================================================
+
+# == fit
+rfqr = RandomForestQuantileRegressor(**best_params)
+rfqr.fit(X, y)
+lower = rfqr.predict(X, quantile=2.5)
+upper = rfqr.predict(X, quantile=97.5)
+med = rfqr.predict(X, quantile=50)
+ypred = reg.predict(X)
+
+# plot
+sort_ind = np.argsort(ypred)
+plt.plot(np.arange(len(upper)), lower[sort_ind], label='lower')
+plt.plot(np.arange(len(upper)), ypred[sort_ind], label='predicted')
+plt.plot(np.arange(len(upper)), med[sort_ind], label='median')
+plt.plot(np.arange(len(upper)), upper[sort_ind], label='upper')
+plt.xlabel('ordered samples')
+plt.ylabel('dropout rate')
+plt.legend()
+plt.show()
+
+
+# ===============================================================
+# SAVE MODEL
 # ===============================================================
 
 # MODEL
 filename = 'app_model1/reg_model2.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(reg, output_file)
+
+
+# QUANTILE MODEL 
+filename = 'app_model1/reg_model2_quantile.pkl'
+with open(filename, 'wb') as output_file:
+    pk.dump(rfqr, output_file)
 
 
 # ===============================================================
