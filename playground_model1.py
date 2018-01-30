@@ -34,7 +34,7 @@ for (k, v) in human_names.items():
         iscat = False
         if len(Xraw[k].unique()) < 3:
             iscat = True
-        column_info_dict[k] = {'name':v, 'categorical': iscat}
+        column_info_dict[k] = {'name': v, 'categorical': iscat}
 
 column_info = pd.DataFrame(column_info_dict).T
 column_info.index.rename('colname', inplace=True)
@@ -197,7 +197,7 @@ feature_names = Xraw.columns.tolist()
 # response_names = yraw.columns.tolist()
 response_names = ['dropped', 'enrolled']
 
-dftest = pd.read_pickle('testing_data.pkl')
+dftest = pd.read_pickle('data/testing_data.pkl')
 Xtest_raw = dftest[feature_names]
 ytest_raw = dftest[response_names]
 ytest_raw['droprate'] = ytest_raw['dropped']/ytest_raw['enrolled']
@@ -215,33 +215,33 @@ print(r2_test)
 # === SAVE DATA & MODEL & METADATA VIA PICKEL === #
 
 # DATA
-filename = 'app_data/Xraw_data.pkl'
+filename = 'data/Xraw_model1.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(Xraw, output_file)
 
-filename = 'app_data/yraw_data.pkl'
+filename = 'data/yraw_model1.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(yraw, output_file)
 
-filename = 'app_data/X_data.pkl'
+filename = 'data/X_model1.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(X, output_file)
 
-filename = 'app_data/y_data.pkl'
+filename = 'data/y_model1.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(y, output_file)
 
 # MODEL
-filename = 'app_data/reg_data.pkl'
+filename = 'data/reg_model1.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(reg, output_file)
 
 # METADATA
-filename = 'app_data/human_names.pkl'
+filename = 'data/human_names.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(human_names, output_file)
 
-filename = 'app_data/column_info.pkl'
+filename = 'data/column_info.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(column_info, output_file)
 

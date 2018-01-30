@@ -4,6 +4,46 @@
 		"selected_items":
 		[
 			[
+				"trace",
+				"trace3\tstatement"
+			],
+			[
+				"mar",
+				"marks"
+			],
+			[
+				"tra",
+				"trace2\tstatement"
+			],
+			[
+				"trac",
+				"trace1\tstatement"
+			],
+			[
+				"quan",
+				"quant_text"
+			],
+			[
+				"qu",
+				"quantile"
+			],
+			[
+				"q",
+				"quantile"
+			],
+			[
+				"pre",
+				"predict"
+			],
+			[
+				"col",
+				"columns"
+			],
+			[
+				"best",
+				"best_params\tstatement"
+			],
+			[
 				"ba",
 				"background-color"
 			],
@@ -82,10 +122,6 @@
 			[
 				"drop",
 				"dropped"
-			],
-			[
-				"best",
-				"best_alpha\tstatement"
 			],
 			[
 				"model",
@@ -208,10 +244,6 @@
 				"enrollment_type"
 			],
 			[
-				"col",
-				"columns\tparam"
-			],
-			[
 				"co",
 				"connectdb\tfunction"
 			],
@@ -222,10 +254,6 @@
 			[
 				"class",
 				"className"
-			],
-			[
-				"mar",
-				"margin-bottom"
 			],
 			[
 				"start_",
@@ -266,10 +294,6 @@
 			[
 				"pred",
 				"pred\tstatement"
-			],
-			[
-				"pre",
-				"predicted"
 			],
 			[
 				"form",
@@ -490,18 +514,6 @@
 			[
 				"ac",
 				"actual"
-			],
-			[
-				"group",
-				"groupby"
-			],
-			[
-				"read",
-				"read_sql_table"
-			],
-			[
-				"try",
-				"try\tTry/Except"
 			]
 		]
 	},
@@ -511,16 +523,7 @@
 			"file": "data.py",
 			"settings":
 			{
-				"buffer_size": 21087,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "model1.py",
-			"settings":
-			{
-				"buffer_size": 1869,
+				"buffer_size": 23141,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -530,14 +533,18 @@
 			"settings":
 			{
 				"buffer_size": 5958,
+				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
 		},
 		{
+			"contents": "# -*- coding: utf-8 -*-\nimport data\nfrom sklearn import linear_model\nfrom sklearn.metrics import mean_squared_error, r2_score, make_scorer\nfrom sklearn.model_selection import cross_val_score, learning_curve, GridSearchCV\nimport matplotlib.pyplot as plt\nfrom sklearn.externals import joblib\nimport pickle as pk\nimport pandas as pd\nimport re\nimport numpy as np\nimport seaborn as sns\n\n\n# ===============================================================\n# GET/MAKE DATA AND METADATA\n# ===============================================================\n(Xraw, yraw, human_names) = data.getmodeldata(getnew=False)\n\nfeature_names = Xraw.columns.tolist()\nresponse_names = yraw.columns.tolist()\n\nX = Xraw.as_matrix()\ny = yraw[response_names[0]].as_matrix()\nytform = y**(1/3)\n\n\n# === Feature metadata\n# Establish dataframe with column metadata, including (1) if it is continuous \n# and (2) it's human-readable name\ncolumn_info_dict = {}\nfor (k, v) in human_names.items():\n    if k in Xraw:\n        iscat = False\n        if len(Xraw[k].unique()) < 3:\n            iscat = True\n        column_info_dict[k] = {'name':v, 'categorical': iscat}\n\ncolumn_info = pd.DataFrame(column_info_dict).T\ncolumn_info.index.rename('colname', inplace=True)\n\n\n# Collect which terms (i.e. categorical dummies) are for each of these groups:\n#   (1) condition mesh terms\n#   (2) intervention mesh terms\n#   (3) intervention type\n#   (4) keywords\n#   (5) phase\nprefixes = ['cond_', 'intv_', 'intvtype_', 'keyword_', 'phase'] # i.e. groups\nfor p in prefixes:\n    # Regex to check if prefix is at the begining of a string (i.e. column name)\n    re_search_str = r'^{}'.format(p)\n    column_info['is_'+p] = False\n\n    # look at each column name, if it matches the prefix, indicate that\n    for n in column_info.index.tolist():\n        if re.search(re_search_str, n) is not None:\n            column_info.loc[n, 'is_'+p] = True\n\n\n# ===============================================================\n# LINEAR MODEL (LASSO + TFORM Y + NORMALIZATION)\n# ===============================================================\n\n# === Initialize model\nreg = linear_model.Lasso(normalize=True)\n\n# reg.fit(X, ytform)\n# ypred = reg.predict(X)\n\n# # === PRINT OUTPUTS === #\n# print('\\n ** Linear regression + normalization + transform y + LASSO')\n# print('Non-zero coefficients:')\n# for (c,f) in sorted(zip(reg.coef_, feature_names)):\n#     if abs(c) > 0:\n#         print('{:+0.2f}\\t{}'.format(c, f))\n\n# print(\"RMS error: {:.2f}\".format(mean_squared_error(ytform, ypred)**(1/2)))\n# print('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))\n\n\n# === CV grid search for hyperparameters \nclf = GridSearchCV(reg, \n             param_grid={'alpha': [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]},\n             scoring=make_scorer(r2_score))\nclf.fit(X, ytform)\nprint(\"Best hyperparameters: {}\".format(clf.best_params_))\nprint(\"* Grid scores:\")\nmeans = clf.cv_results_['mean_test_score']\nstds = clf.cv_results_['std_test_score']\nfor mean, std, params in zip(means, stds, clf.cv_results_['params']):\n    print(\"  %0.3f (+/-%0.03f) for %r\"\n          % (mean, std * 2, params))\nbest_params = clf.best_params_\n\n\n# === Fit with best alpha\nreg = linear_model.Lasso(**best_params, normalize=True)\nreg.fit(X, ytform)\nypred = reg.predict(X)\n\n\n# === Print output\nprint('\\n ** Linear regression + normalization + transform y + LASSO')\nprint('Non-zero coefficients:')\nfor (c,f) in sorted(zip(reg.coef_, feature_names)):\n    if abs(c) > 1e-4:\n        print('{:+0.2f}\\t{}'.format(c, f))\nprint(\"RMS error: {:.2f}\".format(mean_squared_error(ytform, ypred)**(1/2)))\nprint('Training R2 score: {:.2f}'.format(r2_score(ytform, ypred)))\n\n\n\n\nindices = np.argsort(np.abs(reg.coef_))[::-1]\nranked_coefs = reg.coef_[indices]\nranked_names = [column_info.loc[feature_names[j], 'name'] for j in indices]\n\nprint(' ')\nprint('Coefficients by effect size:')\nfor (c,f) in zip(ranked_coefs, ranked_names):\n    if abs(c) > 1e-4:\n        print('{:+0.2f}\\t{}'.format(c, f))\n\n\n\nfor (c, f) in sorted(zip(reg.coef_, feature_names)):\n    if abs(c) > 1e-4:\n        print('{:+0.2f}\\t{}'.format(c, f))\n\n\n\n# === MODEL: K-FOLD CROSS VALIDATION (i.e. check generalizable) \nnfolds = 10\nCV_scores = cross_val_score(reg, X, ytform,\n                            cv=nfolds, \n                            scoring=make_scorer(r2_score))\nprint('{:d}-fold CV R2 score: {:0.2f}+/-{:0.2f}'\n      .format(nfolds, CV_scores.mean(), CV_scores.std()))\n\n\n# === Plot learning curves\n\ntrain_sizes, train_scores, test_scores = \\\n    learning_curve(reg, X, ytform, cv=None, scoring=make_scorer(r2_score))\n\ntrain_scores_mean = np.mean(train_scores, axis=1)\ntrain_scores_std = np.std(train_scores, axis=1)\ntest_scores_mean = np.mean(test_scores, axis=1)\ntest_scores_std = np.std(test_scores, axis=1)\n\nplt.grid()\nplt.fill_between(train_sizes, train_scores_mean - train_scores_std,\n                 train_scores_mean + train_scores_std, alpha=0.1,\n                 color=\"r\")\nplt.fill_between(train_sizes, test_scores_mean - test_scores_std,\n                 test_scores_mean + test_scores_std, alpha=0.1, color=\"g\")\nplt.plot(train_sizes, train_scores_mean, 'o-', color=\"r\",\n         label=\"Training score\")\nplt.plot(train_sizes, test_scores_mean, 'o-', color=\"g\",\n         label=\"Cross-validation score\")\nplt.ylabel('R2')\nplt.xlabel('Training examples')\nplt.ylim((-0.5, 1))\nplt.legend(loc=\"best\")\nplt.show()\n\n\n# === PLOT RESIDUALS \n\nsns.set(font_scale=1.5, style='white')\nypred = reg.predict(X)\n\nfig = plt.figure(figsize=(10, 5))\n\n# hist of resids\nplt.subplot(1, 2, 1)\nsns.distplot(ytform-ypred, bins=50, kde=False, vertical=True)\nsns.despine(fig=fig, bottom=True, left=True)\nplt.xticks([])\nplt.ylabel('Residuals')\nplt.ylim((-0.6, 0.6))\n\n# residuals vs predicted\nplt.subplot(1, 2, 2)\nsns.regplot(ypred, ytform-ypred, fit_reg=False, scatter_kws={'alpha': 0.2})\nplt.ylim((-0.6, 0.6))\nsns.despine()\nplt.xlabel('predicted')\nplt.show()\n\n\n\n# === CALCULATE TEST SET SCORE\n\nfeature_names = Xraw.columns.tolist()\n# response_names = yraw.columns.tolist()\nresponse_names = ['dropped', 'enrolled']\n\ndftest = pd.read_pickle('testing_data.pkl')\nXtest_raw = dftest[feature_names]\nytest_raw = dftest[response_names]\nytest_raw['droprate'] = ytest_raw['dropped']/ytest_raw['enrolled']\n\nXtest = Xtest_raw.as_matrix()\nytest = ytest_raw[['droprate']].as_matrix()\n\n\nr2_test = reg.score(Xtest, ytest**(1/3))\n\nprint(r2_test)\n\n\n\n# === SAVE DATA & MODEL & METADATA VIA PICKEL === #\n\n# DATA\nfilename = 'data/Xraw_model1.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(Xraw, output_file)\n\nfilename = 'data/yraw_model1.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(yraw, output_file)\n\nfilename = 'app_model1/X_model1.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(X, output_file)\n\nfilename = 'app_model1/y_model1.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(y, output_file)\n\n# MODEL\nfilename = 'app_model1/reg_model1.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(reg, output_file)\n\n# METADATA\nfilename = 'app_model1/human_names.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(human_names, output_file)\n\nfilename = 'app_model1/column_info.pkl'\nwith open(filename, 'wb') as output_file:\n    pk.dump(column_info, output_file)\n\n",
 			"file": "playground_model1.py",
+			"file_size": 7215,
+			"file_write_time": 131617524640933971,
 			"settings":
 			{
-				"buffer_size": 7243,
+				"buffer_size": 7227,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -546,7 +553,7 @@
 			"file": "playground_model2.py",
 			"settings":
 			{
-				"buffer_size": 9515,
+				"buffer_size": 10528,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -555,25 +562,7 @@
 			"file": "data_exploration.py",
 			"settings":
 			{
-				"buffer_size": 1699,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "app_model1/app_model1.py",
-			"settings":
-			{
-				"buffer_size": 14510,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "/home/lena/Insight/app/app.py",
-			"settings":
-			{
-				"buffer_size": 14531,
+				"buffer_size": 1695,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -618,7 +607,10 @@
 	},
 	"file_history":
 	[
+		"/home/lena/Insight/project/config.py",
 		"/home/lena/Insight/app/app.py",
+		"/home/lena/Insight/project/demo.py",
+		"/home/lena/Insight/project/model1.py",
 		"/home/lena/Insight/project/app_model1/app_model1.py",
 		"/home/lena/Insight/project/playground_model1.py",
 		"/home/lena/Insight/project/app/app.py",
@@ -626,14 +618,12 @@
 		"/home/lena/Insight/app/Procfile",
 		"/home/lena/Insight/app/.gitignore",
 		"/home/lena/Insight/project/playground.py",
-		"/home/lena/Insight/project/demo.py",
 		"/home/lena/anaconda3/envs/projects/lib/python3.6/site-packages/matplotlib/mpl-data/matplotlibrc",
 		"/home/lena/Insight/project/app_model1/app.py",
 		"/home/lena/Insight/project/insight.sublime-project",
 		"/home/lena/Insight/project/testing.R",
 		"/home/lena/.config/sublime-text-3/Packages/Anaconda/Anaconda.sublime-settings",
 		"/home/lena/.config/sublime-text-3/Packages/User/Anaconda.sublime-settings",
-		"/home/lena/Insight/project/config.py",
 		"/home/lena/Desktop/anaconda-navigator.desktop",
 		"/home/lena/Insight/insightproject/.gitignore.txt",
 		"/home/lena/Insight/project/app/flaskexample/templates/output.html",
@@ -666,6 +656,20 @@
 		"case_sensitive": true,
 		"find_history":
 		[
+			"model1",
+			"app_mod",
+			"config",
+			"model1",
+			"data",
+			"model1",
+			"data.",
+			"remove_highdrops",
+			"histnorm",
+			"predict",
+			"phase",
+			"phase_radio",
+			"phase_checklist",
+			"radio",
 			"sns.set",
 			"dist",
 			".hist",
@@ -723,7 +727,7 @@
 	"groups":
 	[
 		{
-			"selected": 5,
+			"selected": 2,
 			"sheets":
 			[
 				{
@@ -732,15 +736,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 21087,
+						"buffer_size": 23141,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								20418,
-								20423
+								0,
+								0
 							]
 						],
 						"settings":
@@ -765,54 +769,14 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 5203.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 4,
+					"stack_index": 2,
 					"type": "text"
 				},
 				{
 					"buffer": 1,
-					"file": "model1.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 1869,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								1808,
-								1754
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 84.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 5,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
 					"file": "playground.py",
 					"semi_transient": false,
 					"settings":
@@ -824,8 +788,8 @@
 						"selection":
 						[
 							[
-								2831,
-								2835
+								931,
+								931
 							]
 						],
 						"settings":
@@ -835,27 +799,27 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 1108.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 3,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
-					"buffer": 3,
+					"buffer": 2,
 					"file": "playground_model1.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 7243,
+						"buffer_size": 7227,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								6988,
-								6870
+								6650,
+								6660
 							]
 						],
 						"settings":
@@ -865,6 +829,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -876,27 +844,27 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 2500.0,
+						"translation.y": 2795.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 7,
+					"stack_index": 0,
 					"type": "text"
 				},
 				{
-					"buffer": 4,
+					"buffer": 3,
 					"file": "playground_model2.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 9515,
+						"buffer_size": 10528,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								8972,
-								8853
+								853,
+								853
 							]
 						],
 						"settings":
@@ -910,33 +878,41 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								}
 							],
 							"syntax": "Packages/Python/Python.sublime-syntax",
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 3528.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 6,
+					"stack_index": 4,
 					"type": "text"
 				},
 				{
-					"buffer": 5,
+					"buffer": 4,
 					"file": "data_exploration.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1699,
+						"buffer_size": 1695,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								709,
-								709
+								798,
+								798
 							]
 						],
 						"settings":
@@ -946,6 +922,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -960,78 +940,7 @@
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
-					"type": "text"
-				},
-				{
-					"buffer": 6,
-					"file": "app_model1/app_model1.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 14510,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								3452,
-								3453
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 1304.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 2,
-					"type": "text"
-				},
-				{
-					"buffer": 7,
-					"file": "/home/lena/Insight/app/app.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 14531,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								14531,
-								14531
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 5450.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
+					"stack_index": 3,
 					"type": "text"
 				}
 			]
@@ -1039,7 +948,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 22.0
+		"height": 28.0
 	},
 	"input":
 	{
@@ -1080,7 +989,7 @@
 	"project": "insight.sublime-project",
 	"replace":
 	{
-		"height": 68.0
+		"height": 52.0
 	},
 	"save_all_on_build": true,
 	"select_file":

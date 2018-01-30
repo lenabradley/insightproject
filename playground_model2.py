@@ -24,7 +24,7 @@ response_names = yraw.columns.tolist()
 X = Xraw.as_matrix()
 y = yraw[response_names[0]].as_matrix()
 
-with open('app_model1/column_info.pkl', 'rb') as input_file:
+with open('data/column_info.pkl', 'rb') as input_file:
     column_info = pk.load(input_file)
 column_info['name'] = [x.capitalize() for x in column_info['name']]
 
@@ -139,7 +139,7 @@ plt.show()
 
 feature_names = Xraw.columns.tolist()
 
-dftest = pd.read_pickle('testing_data.pkl')
+dftest = pd.read_pickle('data/testing_data.pkl')
 Xtest_raw = dftest[feature_names]
 ytest_raw = dftest[['dropped', 'enrolled']]
 ytest_raw['droprate'] = ytest_raw['dropped']/ytest_raw['enrolled']
@@ -326,13 +326,13 @@ plt.show()
 # ===============================================================
 
 # MODEL
-filename = 'app_model1/reg_model2.pkl'
+filename = 'data/reg_model2.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(reg, output_file)
 
 
 # QUANTILE MODEL 
-filename = 'app_model1/reg_model2_quantile.pkl'
+filename = 'data/reg_model2_quantile.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(rfqr, output_file)
 
@@ -343,10 +343,10 @@ with open(filename, 'wb') as output_file:
 
 feature_names = Xraw.columns.tolist()
 
-dftest = pd.read_pickle('testing_data.pkl')
+dftest = pd.read_pickle('data/testing_data.pkl')
 Xtest_raw = dftest[feature_names]
 ytest_raw = dftest[['dropped', 'enrolled']]
-ytest_raw['droprate'] = ytest_raw['dropped']/ytest_raw['enrolled']
+ytest_raw['droprate'] = ytest_raw['dropped'] / ytest_raw['enrolled']
 
 Xtest = Xtest_raw.as_matrix()
 ytest = ytest_raw[['droprate']].as_matrix()

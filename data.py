@@ -6,7 +6,6 @@ data - a module to extract and process AACT clinical trials data
 (via PostgreSQL), extract features of interest, and clean/process that data
 """
 
-from config import config
 from sqlalchemy import create_engine
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -15,13 +14,34 @@ import re
 from sklearn.model_selection import train_test_split
 import seaborn as sns
 import pickle as pk
+from configparser import ConfigParser
+ 
+def _config(filename='database.ini', section='postgresql'):
+    """ Configure parameters from specified section """
+
+    # create a parser
+    parser = ConfigParser()
+
+    # read config file
+    parser.read(filename)
+ 
+    # get section, default to postgresql
+    db = {}
+    if parser.has_section(section):
+        params = parser.items(section)
+        for param in params:
+            db[param[0]] = param[1]
+    else:
+        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+ 
+    return db
 
 
 def _connectdb():
     """ Open and return SQLAlchemy engine to PostgreSQL database """
 
     # read connection parameters
-    params = config()
+    params = _config()
 
     # connect to the PostgreSQL server
     engine = create_engine('postgresql://%s:%s@%s/%s' %
@@ -531,8 +551,8 @@ def getmodeldata(getnew=False, **kwargs):
 
     # Either gather new data or load from file
     if getnew:
-        default_args = {'savename': 'rawdata.pkl',
-                        'savename_human': 'human_names.pkl',
+        default_args = {'savename': 'data/full_data.pkl',
+                        'savename_human': 'data/human_names.pkl',
                         'N': 50,
                         'dropna': True,
                         'fill_intelligent': True}
@@ -541,9 +561,9 @@ def getmodeldata(getnew=False, **kwargs):
         [df, df_test] = split_data(df, save_suffix='data')
 
     else:
-        df = pd.read_pickle('training_data.pkl')
-        df_test = pd.read_pickle('testing_data.pkl')
-        with open('human_names.pkl', 'rb') as input_file:
+        df = pd.read_pickle('data/training_data.pkl')
+        df_test = pd.read_pickle('data/testing_data.pkl')
+        with open('data/human_names.pkl', 'rb') as input_file:
             human_names = pk.load(input_file)
 
     # Convert response and features to matrices

@@ -16,7 +16,7 @@ response_names = yraw.columns.tolist()
 X = Xraw.as_matrix()
 y = yraw[response_names[0]].as_matrix()
 
-with open('app_model1/column_info.pkl', 'rb') as input_file:
+with open('data/column_info.pkl', 'rb') as input_file:
     column_info = pk.load(input_file)
 column_info['name'] = [x.capitalize() for x in column_info['name']]
 
@@ -26,7 +26,7 @@ column_info['name'] = [x.capitalize() for x in column_info['name']]
 # ===============================================================
 
 # === Histogram of response
-df = pd.read_pickle('rawdata.pkl')
+df = pd.read_pickle('data/full_data.pkl')
 droprate = df['dropped']/df['enrolled']
 sns.set(style='white', font_scale=1)
 sns.distplot(droprate, kde=False)
