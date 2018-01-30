@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import model1
+import data
 # from sklearn import linear_model
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
@@ -16,7 +16,7 @@ from skgarden import RandomForestQuantileRegressor
 # ===============================================================
 # GET DATA AND METADATA
 # ===============================================================
-(Xraw, yraw, human_names) = model1.getmodeldata(getnew=False)
+(Xraw, yraw, human_names) = data.getmodeldata(getnew=False)
 
 feature_names = Xraw.columns.tolist()
 response_names = yraw.columns.tolist()
@@ -309,7 +309,7 @@ upper = rfqr.predict(X, quantile=97.5)
 med = rfqr.predict(X, quantile=50)
 ypred = reg.predict(X)
 
-# plot
+# plot confidence intervals
 sort_ind = np.argsort(ypred)
 plt.plot(np.arange(len(upper)), lower[sort_ind], label='lower')
 plt.plot(np.arange(len(upper)), ypred[sort_ind], label='predicted')

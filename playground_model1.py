@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import model1
+import data
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score, make_scorer
 from sklearn.model_selection import cross_val_score, learning_curve, GridSearchCV
@@ -15,7 +15,7 @@ import seaborn as sns
 # ===============================================================
 # GET/MAKE DATA AND METADATA
 # ===============================================================
-(Xraw, yraw, human_names) = model1.getmodeldata(getnew=False)
+(Xraw, yraw, human_names) = data.getmodeldata(getnew=False)
 
 feature_names = Xraw.columns.tolist()
 response_names = yraw.columns.tolist()
@@ -215,33 +215,33 @@ print(r2_test)
 # === SAVE DATA & MODEL & METADATA VIA PICKEL === #
 
 # DATA
-filename = 'app_model1/Xraw_model1.pkl'
+filename = 'app_data/Xraw_data.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(Xraw, output_file)
 
-filename = 'app_model1/yraw_model1.pkl'
+filename = 'app_data/yraw_data.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(yraw, output_file)
 
-filename = 'app_model1/X_model1.pkl'
+filename = 'app_data/X_data.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(X, output_file)
 
-filename = 'app_model1/y_model1.pkl'
+filename = 'app_data/y_data.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(y, output_file)
 
 # MODEL
-filename = 'app_model1/reg_model1.pkl'
+filename = 'app_data/reg_data.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(reg, output_file)
 
 # METADATA
-filename = 'app_model1/human_names.pkl'
+filename = 'app_data/human_names.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(human_names, output_file)
 
-filename = 'app_model1/column_info.pkl'
+filename = 'app_data/column_info.pkl'
 with open(filename, 'wb') as output_file:
     pk.dump(column_info, output_file)
 

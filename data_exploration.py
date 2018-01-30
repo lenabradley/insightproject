@@ -1,14 +1,14 @@
-import model1
+import data
 import pickle as pk
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+import pandas as pd
 
 
 # ===============================================================
 # GET DATA AND METADATA
 # ===============================================================
-(Xraw, yraw, human_names) = model1.getmodeldata(getnew=False)
+(Xraw, yraw, human_names) = data.getmodeldata(getnew=False)
 
 feature_names = Xraw.columns.tolist()
 response_names = yraw.columns.tolist()
@@ -55,6 +55,8 @@ hm = sns.heatmap(Xraw[keepcols].corr().as_matrix(),
     vmin=-1, vmax=1,
     center=0)
 plt.yticks(rotation=0) 
+ax = plt.gca()
+ax.xaxis.tick_top()
 plt.xticks(rotation=90) 
 plt.tight_layout()
 plt.show()
