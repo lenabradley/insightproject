@@ -394,7 +394,7 @@ def _gather_features(N=10, fill_intelligent=True):
     return (df, human_names)
 
 
-def remove_highdrops(df, thresh=1.0):
+def _remove_highdrops(df, thresh=1.0):
     """ Given dataframe, remove rows where the dropout rate is above thresh, and
     return the resulting dataframe
     """
@@ -430,7 +430,7 @@ def get_data(savename=None, dropna=True, N=10, fill_intelligent=True, savename_h
     human_names = {**Xnames, **Ynames}
 
     # Remove 100% dropouts
-    df = remove_highdrops(df)
+    df = _remove_highdrops(df)
 
     # Drop columns that only have 1 unique value (no info)
     for c in df.columns.tolist():
@@ -516,3 +516,46 @@ def feature_plots(df):
     plt.show()
 
 
+def getmodeldata(getnew=False, **kwargs):
+    """ Gather data from the 'data' module
+
+    Args:
+    getnew (bool): Default False. If True, extract data from scrach. If False, 
+        load from file. If True, pass additional kwargs to get_data()
+
+    Returns:
+        X (dataframe): Features as a numpy array
+        y (dataframe): Response
+        human_names (dict): dictionary mapping columns to human-readable names
+    """
+
+    # Either gather new data or load from file
+    if getnew:
+        default_args = {'savename': 'rawdata.pkl',
+                        'savename_human': 'human_names.pkl',
+                        'N': 50,
+                        'dropna': True,
+                        'fill_intelligent': True}
+        inputargs = {**default_args, **kwargs}
+        (df, human_names) = get_data(**inputargs)
+        [df, df_test] = split_data(df, save_suffix='data')
+
+    else:
+        df = pd.read_pickle('training_data.pkl')
+        df_test = pd.read_pickle('testing_data.pkl')
+        with open('human_names.pkl', 'rb') as input_file:
+            human_names = pk.load(input_file)
+
+    # Convert response and features to matrices
+    response_names = ['dropped', 'enrolled']
+    feature_names = []
+    for c in df.columns.tolist():
+        if c not in response_names:
+            feature_names.append(c)
+
+    X = df[feature_names]
+    tmpdf = df
+    tmpdf['droprate'] = tmpdf['dropped']/tmpdf['enrolled']
+    y = tmpdf[['droprate']]
+
+    return (X, y, human_names)
