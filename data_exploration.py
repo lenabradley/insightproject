@@ -3,7 +3,7 @@ import pickle as pk
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import numpy as np
 
 # ===============================================================
 # GET DATA AND METADATA
@@ -59,4 +59,23 @@ ax = plt.gca()
 ax.xaxis.tick_top()
 plt.xticks(rotation=90) 
 plt.tight_layout()
+plt.show()
+
+
+
+# === Feature clustermap
+sns.set(font_scale=0.25, style='white')
+g = sns.clustermap(Xraw.astype('float').corr(), 
+    center=0, vmin=-1, vmax=1,
+    yticklabels=column_info['name'], xticklabels=column_info['name'])
+plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+plt.setp(g.ax_heatmap.get_xticklabels(), rotation=90)
+# plt.tight_layout()
+
+
+column_info['name'][g.dendrogram_row.reordered_ind]
+
+
+g.savefig('clustermap.png', format='png', dpi=500)
+
 plt.show()

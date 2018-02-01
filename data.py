@@ -15,7 +15,8 @@ from sklearn.model_selection import train_test_split
 import seaborn as sns
 import pickle as pk
 from configparser import ConfigParser
- 
+from nltk.tokenize import RegexpTokenizer
+
 def _config(filename='database.ini', section='postgresql'):
     """ Configure parameters from specified section """
 
@@ -579,3 +580,4 @@ def getmodeldata(getnew=False, **kwargs):
     y = tmpdf[['droprate']]
 
     return (X, y, human_names)
+

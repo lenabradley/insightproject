@@ -184,7 +184,7 @@ print("Best hyperparameters: {}".format(best_params))
 
 
 # === FIT RF-REGRESSION WITH BEST PARAMS
-best_params = {'n_estimators': 100, 'max_depth': 10, 'min_samples_leaf': 5}
+best_params = {'n_estimators': 1000, 'max_depth': 10, 'min_samples_leaf': 5}
 
 reg = RandomForestRegressor(**best_params)
 reg.fit(X, y)
@@ -321,6 +321,192 @@ plt.legend()
 plt.show()
 
 
+# === SETUP RANDOM FOREST
+regq = RandomForestQuantileRegressor()
+nfolds = 5
+
+# === GRID SEARCH FOR HYPERPARAMETERS
+clf = GridSearchCV(regq,
+             param_grid={'n_estimators': [1000],
+                         'max_depth': [10, 50],
+                         'max_features': [None],
+                         'min_samples_leaf': [5]},
+             scoring=make_scorer(r2_score), cv=nfolds)
+clf.fit(X, y)
+
+print("* Grid scores:")
+means = clf.cv_results_['mean_test_score']
+stds = clf.cv_results_['std_test_score']
+for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+    print("  %0.3f (+/-%0.03f) for %r"
+          % (mean, std * 2, params))
+
+best_params = clf.best_params_
+print("Best hyperparameters: {}".format(best_params))
+
+
+# === FIT RF-REGRESSION WITH BEST PARAMS
+best_params = {'n_estimators': 1000, 'max_depth': 50, 'min_samples_leaf': 5}
+regq = RandomForestQuantileRegressor(**best_params)
+regq.fit(X, y)
+
+# print report
+r2_train = regq.score(X, y)
+print('Training data R2 score: {:0.2f}'.format(r2_train))
+
+
+# === KFOLD CROSS VALIDATION (R2)
+CV_scores = cross_val_score(regq, X, y,
+                            cv=nfolds, 
+                            scoring=make_scorer(r2_score))
+print('{:d}-fold CV R2 score: {:0.2f}+/-{:0.2f}'
+      .format(nfolds, CV_scores.mean(), CV_scores.std()))
+
+# 5-fold CV R2 score: 0.47+/-0.02
+
+
+# === PLOT RESIDUALS
+sns.set(font_scale=1.5, style='white')
+ypred = regq.predict(X)
+
+fig = plt.figure(figsize=(10, 5))
+
+# hist of resids
+plt.subplot(1, 2, 1)
+sns.distplot(y-ypred, bins=50, kde=False, vertical=True)
+sns.despine(fig=fig, bottom=True, left=True)
+plt.xticks([])
+plt.ylabel('Residuals')
+plt.ylim((-0.6, 0.6))
+
+# residuals vs predicted
+plt.subplot(1, 2, 2)
+sns.regplot(ypred, y-ypred, fit_reg=False, scatter_kws={'alpha': 0.2})
+plt.ylim((-0.6, 0.6))
+sns.despine()
+plt.xlabel('predicted')
+plt.show()
+
+
+# === FEATURE IMPORTANCES & PLOT
+
+# Calculate feature importances
+names = Xraw.columns.tolist()
+importances = regq.feature_importances_
+std = np.std([tree.feature_importances_ for tree in regq.estimators_],
+             axis=0)
+indices = np.argsort(importances)[::-1]
+
+
+ranked_importances = importances[indices]
+ranked_std = std[indices]
+ranked_names = [names[j] for j in indices]
+
+column_info.loc['completed', 'name'] = 'Number of participants needed'
+
+ranked_humannames = []
+for n in ranked_names:
+    hname = column_info.loc[n, 'name']
+    if column_info.loc[n, 'is_cond_']:
+        hname = 'Condition: ' + hname
+    elif column_info.loc[n, 'is_intv_']:
+        hname = 'Intervention: ' + hname
+    elif column_info.loc[n, 'is_intvtype_']:
+        hname = 'Class: ' + hname
+    elif column_info.loc[n, 'is_keyword_']:
+        hname = 'Keyword: ' + hname
+    ranked_humannames.append(hname)
+
+
+# Plot the feature importances of the regression (top N)
+N = 15
+sns.set(style='whitegrid')
+f, ax = plt.subplots(figsize=(6,4))
+sns.barplot(ranked_importances[:N], 
+            ranked_humannames[:N],
+            ci=ranked_std[:N])
+plt.title("Feature importance")
+plt.tight_layout()
+plt.show()
+
+
+# === LEARNING CURVES 
+train_sizes, train_scores, test_scores = \
+    learning_curve(regq, X, y,
+                   cv=nfolds, scoring=make_scorer(r2_score))
+
+train_scores_mean = np.mean(train_scores, axis=1)
+train_scores_std = np.std(train_scores, axis=1)
+test_scores_mean = np.mean(test_scores, axis=1)
+test_scores_std = np.std(test_scores, axis=1)
+
+plt.grid()
+
+plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
+                 train_scores_mean + train_scores_std, alpha=0.1,
+                 color="r")
+plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
+                 test_scores_mean + test_scores_std, alpha=0.1, color="g")
+plt.plot(train_sizes, train_scores_mean, 'o-', color="r",
+         label="Training score")
+plt.plot(train_sizes, test_scores_mean, 'o-', color="g",
+         label="Cross-validation score")
+
+sns.despine()
+plt.ylabel('R2 score')
+plt.xlabel('Training examples')
+plt.ylim((0, 1))
+plt.legend(loc="best")
+plt.show()
+
+
+
+# ===============================================================
+# COMPARE RF WITH RF QUANTILE 
+# ===============================================================
+
+
+y_pred_rf = reg.predict(X)
+y_pred_rfq = regq.predict(X)
+
+plt.figure()
+plt.plot(y_pred_rf, y_pred_rfq, '.')
+plt.xlabel('Random Forest prediction (dropout rate)')
+plt.ylabel('Quantile random forest prediction (dropout rate)')
+plt.show()
+
+
+
+
+# ===============================================================
+# DRAW SOME TREES
+# ===============================================================
+
+import pydotplus
+import six
+from sklearn import tree
+from sklearn.tree import export_graphviz
+
+dotfile = six.StringIO()
+
+i_tree = 0
+for tree_in_forest in regq.estimators_[:0]:
+    if (i_tree < 1):
+
+import os
+i_tree = 0
+for tree_in_forest in regq.estimators_[:5]:
+    export_graphviz(tree_in_forest,
+        max_depth=3,
+        feature_names=Xraw.columns,
+        filled=True,
+        rounded=True,
+        out_file='tree.dot')
+    filename = ('reports/decision_tree/QRF_dtree'+ str(i_tree) +'.png')
+    os.system('dot -Tpng tree.dot -o ' + filename)
+    i_tree += 1
+
+
 # ===============================================================
 # SAVE MODEL
 # ===============================================================
@@ -334,7 +520,17 @@ with open(filename, 'wb') as output_file:
 # QUANTILE MODEL 
 filename = 'data/reg_model2_quantile.pkl'
 with open(filename, 'wb') as output_file:
-    pk.dump(rfqr, output_file)
+    pk.dump(regq, output_file)
+
+
+
+
+trainsize = 400
+idx = range(size)
+#shuffle the data
+np.random.shuffle(idx)
+rf = RandomForestRegressor(n_estimators=1000, min_samples_leaf=1)
+rf.fit(X, y)
 
 
 # ===============================================================
