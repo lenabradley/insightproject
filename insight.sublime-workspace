@@ -4,6 +4,14 @@
 		"selected_items":
 		[
 			[
+				"Confide",
+				"Confidence"
+			],
+			[
+				"ypre",
+				"y_pred_rfq\tstatement"
+			],
+			[
 				"excl",
 				"excl_text"
 			],
@@ -364,10 +372,6 @@
 				"cval\tstatement"
 			],
 			[
-				"ypre",
-				"ypred_u"
-			],
-			[
 				"fil",
 				"fill_between\tfunction"
 			],
@@ -510,10 +514,6 @@
 			[
 				"stud",
 				"study_type"
-			],
-			[
-				"en",
-				"enrollment_type"
 			]
 		]
 	},
@@ -550,7 +550,16 @@
 			"file": "playground_model2.py",
 			"settings":
 			{
-				"buffer_size": 10522,
+				"buffer_size": 15841,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/home/lena/Insight/app/app.py",
+			"settings":
+			{
+				"buffer_size": 19200,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -559,7 +568,7 @@
 			"file": "data_exploration.py",
 			"settings":
 			{
-				"buffer_size": 1696,
+				"buffer_size": 2178,
 				"encoding": "UTF-8",
 				"line_ending": "Unix"
 			}
@@ -640,7 +649,7 @@
 	],
 	"find":
 	{
-		"height": 39.0
+		"height": 44.0
 	},
 	"find_in_files":
 	{
@@ -654,6 +663,9 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"rfqr",
+			"reg",
+			"criteri",
 			"pkl",
 			".pkl",
 			"rawdata.pkl",
@@ -729,7 +741,7 @@
 	"groups":
 	[
 		{
-			"selected": 1,
+			"selected": 4,
 			"sheets":
 			[
 				{
@@ -775,10 +787,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 57.0,
+						"translation.y": 60.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 3,
 					"type": "text"
 				},
 				{
@@ -817,10 +829,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 228.0,
+						"translation.y": 240.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 5,
 					"type": "text"
 				},
 				{
@@ -874,15 +886,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 10522,
+						"buffer_size": 15841,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
+								14367,
+								14367
 							]
 						],
 						"settings":
@@ -892,6 +904,10 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -910,27 +926,27 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 0.0,
+						"translation.y": 9356.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 3,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
 					"buffer": 4,
-					"file": "data_exploration.py",
+					"file": "/home/lena/Insight/app/app.py",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1696,
+						"buffer_size": 19200,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								626,
-								626
+								10606,
+								10606
 							]
 						],
 						"settings":
@@ -940,6 +956,51 @@
 								{
 									"characters": ".",
 									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
+								}
+							],
+							"syntax": "Packages/Python/Python.sublime-syntax",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 3897.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "data_exploration.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2178,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1742,
+								1742
+							]
+						],
+						"settings":
+						{
+							"auto_complete_triggers":
+							[
+								{
+									"characters": ".",
+									"selector": "source.python - string - comment - constant.numeric"
+								},
+								{
+									"characters": ".",
+									"selector": "source.python - string - constant.numeric"
 								},
 								{
 									"characters": ".",
@@ -966,7 +1027,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 28.0
+		"height": 32.0
 	},
 	"input":
 	{
@@ -1007,7 +1068,7 @@
 	"project": "insight.sublime-project",
 	"replace":
 	{
-		"height": 52.0
+		"height": 60.0
 	},
 	"save_all_on_build": true,
 	"select_file":
