@@ -6,7 +6,9 @@ data - a module to extract and process AACT clinical trials data
 (via PostgreSQL), extract features of interest, and clean/process that data
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import select
 import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
@@ -45,90 +47,73 @@ def _connectdb():
     params = _config()
 
     # connect to the PostgreSQL server
-    engine = create_engine('postgresql://%s:%s@%s/%s' %
+    conn = create_engine('postgresql://%s:%s@%s/%s' %
                            (params['user'], params['password'],
                             params['host'], params['database']))
 
-    return engine
+    meta = MetaData(bind=conn)
+    meta.reflect()
+
+    return conn, meta
 
 
 def _gather_response():
     """ Connect to AACT postgres database and collect response variables (number
-    of participants enrolled and dropped), with some consistency checks
+    of participants started, completed, not completed)
 
     Returns:
         df (DataFrame): Pandas dataframe with columns for study ID ('nct_id'), 
             number of participants enrolled ('enrolled') at the start, and the
             number that dropped out ('dropped')
         human_names (dict): dictionary mapping columns to human-readable names
+    """    
 
-    Notes:
-    - Only keep studies with valid (non-nan) data
-    - Only keep studies where all of the following are true:
-        a. the total number of participants dropped equals the number 'NOT
-           COMPLETED' 
-        b. the number of participants 'STARTED' equals the number 'COMPLETED'
-           plus the number 'NOT COMPLETED'
-        c. the number of participants 'STARTED' equals the number 'enrolled'
-    """
+    conn, meta = _connectdb()
+    df = None
 
-    # Connect to AACT database
-    engine = _connectdb()
+    # # Sum dropout counts    
+    # table = meta.tables['drop_withdrawals']
+    # cols = [table.c.nct_id, func.sum(table.c.count).label('dropout')]
+    # grp = table.c.nct_id
+    # clause = select(cols).group_by(grp)
+    # if df is None:
+    #     df = pd.read_sql(clause, conn)
+    # else:
+    #     df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
 
+    # # Actual (not anticipated) enrollment numbers    
+    # table = meta.tables['studies']
+    # cols = [table.c.nct_id, table.c.enrollment]
+    # filt = table.c.enrollment_type == 'Actual'
+    # clause = select(cols).where(filt)
+    # if df is None:
+    #     df = pd.read_sql(clause, conn)
+    # else:
+    #     df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
 
-    # Gather enrollment/dropout numbers - PART 1a
-    #   Gather dropout info from the 'drop_withdrawals' table by summing
-    #   the total count of people that dropped out within each study
-    colnames = {'nct_id': 'nct_id', 
-                'count':'dropped'}
-    df = pd.read_sql_table('drop_withdrawals', engine,
-                           columns=colnames.keys()
-                           ).groupby('nct_id').sum().rename(columns=colnames)
-
-    # Gather enrollment/dropout numbers - PART 1b
-    #   Gather enrollment numbers (actual, not anticipated) from 'studies' table
-    #   and append to existing dataframe
-    colnames = {'nct_id':'nct_id', 
-                'enrollment':'enrolled', 
-                'enrollment_type': 'enrollment_type'}
-    studies = pd.read_sql_table('studies', engine, 
-                                columns=colnames.keys()
-                                ).set_index('nct_id').rename(columns=colnames)
-    filt = [x=='Actual' for x in studies['enrollment_type']]
-    df = df.join(studies[filt][['enrolled']].astype(int), how='inner')
-    df.dropna(how='any', inplace=True)
-
-    # Gather enrollment/dropout numbers - PART 2
-    #   Gather enrollment and dropout numbers from the 'milestones' table, only
-    #   looking at the COMPLTED/STARTED/NOT COMPLETED counts, and append to 
-    #   existing dataframe
-    colnames = {'nct_id': 'nct_id', 
-                'title': 'milestone_title', 
-                'count':'milestone_count'}
-    df2 = pd.read_sql_table('milestones', engine, columns=colnames.keys())
-    value_str = ['COMPLETED', 'STARTED', 'NOT COMPLETED']
-    for s in value_str:
-        filt = df2['title'].str.match(s)
-        df = df.join(df2[filt][['nct_id','count']] \
-            .groupby('nct_id').sum().rename(columns={'count':s}), how='inner')
-
-    # Check the various enrollment measures against each other and only keep 
-    # studies that make sense
-    filt = ((df['enrolled'] == df['STARTED']) & 
-            (df['dropped'] == df['NOT COMPLETED']) &
-            (df['STARTED'] == (df['NOT COMPLETED']+df['COMPLETED'])))
-    df = df[filt]
-
-    # return limited dataframe
-    df.rename(columns={'COMPLETED': 'completed'}, inplace=True)
-    df = df[['enrolled', 'dropped', 'completed']]
+    # Milestone counts of started / completed / not completed
+    table = meta.tables['milestones']
+    for title in ['STARTED', 'COMPLETED', 'NOT COMPLETED']:
+        newtitle = title.lower().replace(' ', '')
+        cols = [table.c.nct_id, func.sum(table.c.count).label(newtitle)]
+        filt = table.c.title == title
+        grp = table.c.nct_id
+        clause = select(cols).where(filt).group_by(grp)
+        if df is None:
+            df = pd.read_sql(clause, conn)
+        else:
+            df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
 
     # human-readable names
-    human_names = {'enrolled': 'number of participants enrolled',
-                   'dropped': 'number participants dropped',
-                   'completed': 'number of participants completed'}
+    human_names = {'started': 'number of participants',
+                   'completed': 'number participants completed',
+                   'notcompleted': 'number of participants dropped'}
+    name_check = human_names.keys()
+    for k in name_check:
+        if k not in df:
+            del human_names[k]
 
-    return (df, human_names)
+    return df, human_names
 
 
 def _gather_features(N=10, fill_intelligent=True):
