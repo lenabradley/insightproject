@@ -6,9 +6,8 @@ data - a module to extract and process AACT clinical trials data
 (via PostgreSQL), extract features of interest, and clean/process that data
 """
 
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.sql import func
-from sqlalchemy.sql.expression import select
+from sqlalchemy import create_engine, MetaData, func, or_, and_, distinct
+from sqlalchemy.orm import sessionmaker
 import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
@@ -18,6 +17,7 @@ import seaborn as sns
 import pickle as pk
 from configparser import ConfigParser
 from nltk.tokenize import RegexpTokenizer
+
 
 def _config(filename='database.ini', section='postgresql'):
     """ Configure parameters from specified section """
@@ -57,57 +57,88 @@ def _connectdb():
     return conn, meta
 
 
-def _gather_response():
+def list_group(df, group_column=None, value_column=None):
+    """ Given dataframe, use numpy to group rows by group_column and return a 
+    dataframe with all corresponding values in value_column as a list
+
+    Kwargs:
+        df (dataframe): Dataframe with columns to group_by and list
+        group_column (string): Name of column to group on
+        value_column (string): Name of column for which to return all grouped 
+            values as a list
+
+    Returns:
+        df2 (dataframe): A new data frame with two columns (group_column and 
+            value_column), where value_column is a list of the corresponding 
+            group entries
+
+    Notes:
+        - The resulting dataframe only contains the two parameter columns, all 
+        other information in the input dataframe is lost
+    """
+    keys, values = df.sort_values(group_column).values.T
+    ukeys, index = np.unique(keys, True)
+    arrays = np.split(values, index[1:])
+    df2 = pd.DataFrame({group_column: ukeys,
+                        value_column: [list(a) for a in arrays]}) 
+    return df2[[group_column, value_column]]
+
+
+def _gather_response(conn=None, meta=None):
     """ Connect to AACT postgres database and collect response variables (number
     of participants started, completed, not completed)
+
+    Kwargs:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection
 
     Returns:
         df (DataFrame): Pandas dataframe with columns for study ID ('nct_id'), 
             number of participants enrolled ('enrolled') at the start, and the
             number that dropped out ('dropped')
         human_names (dict): dictionary mapping columns to human-readable names
-    """    
+    """
 
-    conn, meta = _connectdb()
+    # Initialize output dataframe
     df = None
 
-    # # Sum dropout counts    
-    # table = meta.tables['drop_withdrawals']
-    # cols = [table.c.nct_id, func.sum(table.c.count).label('dropout')]
-    # grp = table.c.nct_id
-    # clause = select(cols).group_by(grp)
-    # if df is None:
-    #     df = pd.read_sql(clause, conn)
-    # else:
-    #     df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
-
-    # # Actual (not anticipated) enrollment numbers    
-    # table = meta.tables['studies']
-    # cols = [table.c.nct_id, table.c.enrollment]
-    # filt = table.c.enrollment_type == 'Actual'
-    # clause = select(cols).where(filt)
-    # if df is None:
-    #     df = pd.read_sql(clause, conn)
-    # else:
-    #     df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
 
     # Milestone counts of started / completed / not completed
     table = meta.tables['milestones']
     for title in ['STARTED', 'COMPLETED', 'NOT COMPLETED']:
+        # set new column name as lowercase, no spaces
         newtitle = title.lower().replace(' ', '')
-        cols = [table.c.nct_id, func.sum(table.c.count).label(newtitle)]
-        filt = table.c.title == title
+
+        # setup & run sql query
         grp = table.c.nct_id
-        clause = select(cols).where(filt).group_by(grp)
+        cols = (grp, func.sum(table.c.count).label(newtitle))
+        filt = table.c.title == title
+        query = session.query(*cols).filter(filt).group_by(grp)
+
+        # Gather results and merge with existing dataframe, if applicable
+        newdf = pd.read_sql(query.statement, query.session.bind)
         if df is None:
-            df = pd.read_sql(clause, conn)
+            df = newdf
         else:
-            df = df.merge(pd.read_sql(clause, conn), on='nct_id', how='outer')
+            df = df.merge(newdf, on='nct_id', how='outer')
+
+    # Calculate dropout rate (if invalid, set to -1)
+    df['droprate'] = df['notcompleted'] / df['started']
+    df['droprate'] = df['droprate'].fillna(-1)
+    df['droprate'] = df['droprate']
 
     # human-readable names
     human_names = {'started': 'number of participants',
                    'completed': 'number participants completed',
-                   'notcompleted': 'number of participants dropped'}
+                   'notcompleted': 'number of participants dropped',
+                   'droprate': 'dropout rate (fraction)'}
     name_check = human_names.keys()
     for k in name_check:
         if k not in df:
@@ -116,288 +147,418 @@ def _gather_response():
     return df, human_names
 
 
-def _gather_features(N=10, fill_intelligent=True):
-    """ Connect to AACT database, join select data, and return as a dataframe
+def _gather_sex(conn=None, meta=None):
+    """ Connect to AACT database and calculate study participant counts by sex
+
+    Kwargs:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection
+
+    Returns:
+        df (dataframe): Pandas dataframe with study id ('nct_id') and total 
+            number of participants, separated by sex ('male', and 'female')
+        human_names (dict): dictionary mapping columns to human-readable names
+    """
+
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()    
+
+    # Initialize output dataframe
+    df = None
+
+    # prep for query
+    table = meta.tables['baseline_measurements']
+    grp_cols = (table.c.category, table.c.classification)
+
+    # Group counts by sex (fe/male)
+    sexes = ['male', 'female']
+    for sex in sexes:
+        cols = (table.c.nct_id, func.sum(table.c.param_value_num).label(sex))
+        filt = or_(c.ilike(sex) for c in grp_cols)
+        query = session.query(*cols).filter(filt).group_by(table.c.nct_id)
+
+        # Merge with existing dataframe, if applicable
+        newdf = pd.read_sql(query.statement, query.session.bind)
+        if df is None:
+            df = newdf
+        else:
+            df = df.merge(newdf, on='nct_id', how='outer')
+
+    # if no data, assume group size of zero
+    for sex in sexes:
+        df[sex] = df[sex].fillna(0).astype(int)
+
+    # calculate fraction male
+    df['malefraction'] = df['male'] / (df['male'] + df['female'])
+    df = df[['nct_id', 'malefraction']]
+
+    # human-readable names
+    human_names = {'malefraction': 'fraction male'}
+    name_check = human_names.keys()
+    for k in name_check:
+        if k not in df:
+            del human_names[k]
+
+    return df, human_names
+
+
+def _gather_conditions(conn=None, meta=None, N=10):
+    """ Connect to AACT database and gather list of top N most common MESH terms
+    of conditions, group by study ID (nct_id)
 
     Args:
-        N (int): For each word-based categorical features (i.e. MeSH conditions,
-            MeSH interventions, and keywords), only keep the top N most common 
-            strings as features (dummies). Default is 10
-        fill_intelligent (bool): If True, fill empty/null/NaNs with best-guess 
-            values. If False, leave as NaNs. Default is True
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection    
+        N (int): Only keep the top N most common terms/keywords. Default 10
 
     Return:
-        df (DataFrame): pandas dataframe with full data
+        df (DataFrame): pandas dataframe with columns for study ID ('nct_id'), 
+            and list of top N condition mesh terms ('conditions')
+        human_names (dict): dictionary mapping columns to human-readable names    
+    """
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # Initialize output dataframe
+    df = None
+
+    # prep for query
+    table = meta.tables['browse_conditions']
+
+    # Gather conditions vocabulary (top N most frequent terms)
+    col = table.c.downcase_mesh_term.label('term')
+    countcol = func.count(col).label('count')
+    query = session.query(col).group_by(col).order_by(countcol.desc()).limit(N)
+    top_terms = [x[0] for x in query.all()]
+
+    # Collect list of top terms in each study
+    cols = (table.c.nct_id, table.c.downcase_mesh_term.label('conditions'))
+    filt = or_(table.c.downcase_mesh_term == term for term in top_terms)
+    query = session.query(*cols).filter(filt)
+    newdf = pd.read_sql(query.statement, query.session.bind)
+    df = list_group(newdf, group_column='nct_id', value_column='conditions')
+
+    # Human-readable names
+    human_names = {'conditions': 'list of condition MESH terms'}
+
+    return df, human_names
+
+
+def _gather_interventions(conn=None, meta=None, N=10):
+    """ Connect to AACT database and gather list of top N most common MESH terms
+    of interventions, group by study ID (nct_id)
+
+    Args:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection    
+        N (int): Only keep the top N most common terms/keywords. Default 10
+
+    Return:
+        df (DataFrame): pandas dataframe with columns for study ID ('nct_id'), 
+            and list of top N intervention mesh terms ('interventions')
+        human_names (dict): dictionary mapping columns to human-readable names    
+    """
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # Initialize output dataframe
+    df = None
+
+    # prep for query
+    table = meta.tables['browse_interventions']
+
+    # Gather conditions vocabulary (top N most frequent terms)
+    col = table.c.downcase_mesh_term.label('term')
+    countcol = func.count(col).label('count')
+    query = session.query(col).group_by(col).order_by(countcol.desc()).limit(N)
+    top_terms = [x[0] for x in query.all()]
+
+    # Collect list of top terms in each study
+    cols = (table.c.nct_id, table.c.downcase_mesh_term.label('interventions'))
+    filt = or_(table.c.downcase_mesh_term == term for term in top_terms)
+    query = session.query(*cols).filter(filt)
+    newdf = pd.read_sql(query.statement, query.session.bind)
+    df = list_group(newdf, group_column='nct_id', value_column='interventions')
+
+    # Human-readable names
+    human_names = {'interventions': 'list of intervention MESH terms'}
+
+    return df, human_names
+
+
+def _gather_keywords(conn=None, meta=None, N=10):
+    """ Connect to AACT database and gather list of top N most common keywords, 
+    grouped by study ID (nct_id)
+
+    Args:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection    
+        N (int): Only keep the top N most common terms/keywords. Default 10
+
+    Return:
+        df (DataFrame): pandas dataframe with columns for study ID ('nct_id'), 
+            and list of top N intervention mesh terms ('interventions')
+        human_names (dict): dictionary mapping columns to human-readable names    
+    """
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # Initialize output dataframe
+    df = None
+
+    # prep for query
+    table = meta.tables['keywords']
+
+    # Gather conditions vocabulary (top N most frequent terms)
+    col = table.c.downcase_name.label('keyword')
+    countcol = func.count(col).label('count')
+    query = session.query(col).group_by(col).order_by(countcol.desc()).limit(N)
+    top_terms = [x[0] for x in query.all()]
+
+    # Collect list of top terms in each study
+    cols = (table.c.nct_id, table.c.downcase_name.label('keywords'))
+    filt = or_(table.c.downcase_name == term for term in top_terms)
+    query = session.query(*cols).filter(filt)
+    newdf = pd.read_sql(query.statement, query.session.bind)
+    df = list_group(newdf, group_column='nct_id', value_column='keywords')
+
+    # Human-readable names
+    human_names = {'keywords': 'list of keywords'}
+
+    return df, human_names
+
+
+def _gather_phase(conn=None, meta=None):
+    """ Connect to AACT database and gather phase info
+
+    Kwargs:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection
+
+    Returns:
+        df (dataframe): Pandas dataframe with results, including study id 
+            ('nct_id'), and one boolean True/False column for each phase
+        human_names (dict): dictionary mapping columns to human-readable names
+    """
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # Initialize output dataframe
+    df = None
+
+    # query phase info, True if matches that phase, false otherwise
+    table = meta.tables['studies']
+    for num in range(4):
+        filt = table.c.phase.contains(str(num+1))
+        cols = (table.c.nct_id, filt.label('phase{}'.format(num+1)))
+        query = session.query(*cols).filter(filt)
+        newdf = pd.read_sql(query.statement, query.session.bind)
+        if df is None:
+            df = newdf
+        else:
+            df = df.merge(newdf, on='nct_id', how='outer')
+        df = df.fillna(False)
+
+    # human readable names
+    human_names = {'phase1': 'Phase 1',
+                   'phase2': 'Phase 2',
+                   'phase3': 'Phase 3',
+                   'phase4': 'Phase 4'}
+
+    return df, human_names
+
+
+def _gather_minage(conn=None, meta=None):
+    """ Connect to AACT database and gather minimum age for study participants
+
+    Args:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection    
+
+    Return:
+        df (DataFrame): pandas dataframe with columns for study ID ('nct_id'), 
+            and minimum age in year ('minage')
+        human_names (dict): dictionary mapping columns to human-readable names
+    """
+
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
+
+    # Initialize output dataframe
+    df = None
+
+    # prep for query
+    table = meta.tables['calculated_values']
+
+    # Collect age number and units for each study
+    cols = (table.c.nct_id, 
+            table.c.minimum_age_unit.label('unit'),
+            table.c.minimum_age_num.label('num'))
+    filt = table.c.minimum_age_num.isnot(None)
+    query = session.query(*cols).filter(filt)
+    df = pd.read_sql(query.statement, query.session.bind)
+
+    # fix unit case/spelling
+    df['unit'] = [re.sub(r's$', '', x).strip() if x is not None
+                  else None for x in df['unit'].str.lower()]
+
+    # convert age units into years
+    unit_map = {'year': 1., 'month': 1. / 12., 'week': 1. / 52.1429,
+                'day': 1. / 365.2422, 'hour': 1. / 8760., 
+                'minute': 1. / 525600.}
+    df['factor'] = df['unit'].map(unit_map)
+    df['minage'] = (df['num'] * df['factor'])
+
+    # Only keep cols of interest
+    df = df[['nct_id', 'minage']]
+
+    # humannames
+    human_names = {'minage': 'minimum age (years)'}
+
+    return df, human_names
+
+
+def _gather_otherstuff(conn=None, meta=None):
+    """ Connect to AACT database and gather various columns of interest (esp. 
+    those that require little processing)
+
+    Args:
+        conn (engine): Sqlalchemy engine connection to database. If None, a new 
+            connection will be established. Default is None
+        meta (metadata): Sqlalchemy metadata scheme from conn. If None, it will
+            be gathered from a new connection    
+
+    Return:
+        df (DataFrame): pandas dataframe with columns for study ID ('nct_id'), 
+            and other features of interest
         human_names (dict): dictionary mapping columns to human-readable names
 
     Notes:
-    - filter for Completed & Inverventional studies only
-    - Creates dummy variables
-    """
+        - Only return studies that are (1) Compelted and (2) Interventional
+    """    
 
-    """ Notes to self about tables
-    table_names = [
-        # 'baseline_counts',              # x
-        'baseline_measurements',        # Y male/female [category, param_value_num]
-        # 'brief_summaries',              # ~ long text description
-        'browse_conditions',            # Y mesh terms of disease (3700) -> heirarchy, ID --> Get this!
-        'browse_interventions',         # Y mesh terms of treatment (~3000)
-        'calculated_values',            # Y [number_of_facilities, registered_in_calendar_year, registered_in_calendar_year, registered_in_calendar_year, min age, max age]
-        # 'conditions',                   # x condition name
-        # 'countries',                    # ~ Country name
-        # 'design_group_interventions',   # x
-        # 'design_groups'                 # x
-        # 'design_outcomes',              # x
-        # 'designs',                      # x~ subject/caregiver/investigator blinded?
-        # 'detailed_descriptions',        # x 
-        # 'drop_withdrawals',             # Y --> already in response
-        # 'eligibilities',                # Y (genders) --> Already got from baseline?
-        # 'facilities',                   # x
-        # 'intervention_other_names',     # x
-        'interventions',                # Y intervetion_type (11)
-        'keywords',                     # Y downcase_name (160,000!)
-        # 'milestones',                   # Y title (NOT COMPLETE/COMPLETED, 90,000) and count --> already in response
-        # 'outcomes',                     # x
-        # 'participant_flows',            # x
-        # 'reported_events',              # x
-        # 'result_groups',                # x
-        'studies'                       # Y [study_type, overall_status (filt), phase (parse), number_of_arms, number_of_groups, has_dmc, is_fda_regulated_drug, is_fda_regulated_device, is_unapproved_device]
-    ]
-    """
+    # Connect to database, if necessary, & open session
+    if conn is None or meta is None:
+        conn, meta = _connectdb()
+    Session = sessionmaker(bind=conn)
+    session = Session()
 
-    # Prep args
-    N = int(N)
+    # Initialize output dataframe
+    df = None
+
+    # from calculated values
+    table = meta.tables['calculated_values']
+    cols = (table.c.nct_id,
+            table.c.number_of_facilities.label('facilities'),
+            table.c.registered_in_calendar_year.label('year'),
+            table.c.actual_duration.label('duration'),
+            table.c.has_us_facility.label('usfacility'))
+    filt = table.c.actual_duration.isnot(None)
+    query = session.query(*cols).filter(filt)
+    cdf = pd.read_sql(query.statement, query.session.bind)
+
+    # from interventions
+    table = meta.tables['interventions']
+    query = session.query(distinct(table.c.intervention_type))
+    classes = [x[0] for x in query.all()]
+    cols = [table.c.nct_id]
+    i_human_names = {}
+    for cl in classes:
+        clname = cl.lower().replace(' ', '')
+        i_human_names[clname] = 'class: {}'.format(cl.lower())
+        cols.append(table.c.intervention_type.contains(cl).label(clname))
+    query = session.query(*cols)
+    idf = pd.read_sql(query.statement, query.session.bind)
+    idf = idf.drop_duplicates(subset='nct_id', keep='first')
+
+    # from studies
+    table = meta.tables['studies']
+    cols = (table.c.nct_id,
+            table.c.number_of_arms.label('arms'))
+    filt = and_(table.c.study_type.contains('Interventional'),
+                table.c.overall_status.contains('Completed'))
+    query = session.query(*cols).filter(filt)
+    sdf = pd.read_sql(query.statement, query.session.bind)
+
+    # Merge
+    df1 = cdf.merge(idf, on='nct_id', how='inner')
+    df = sdf.merge(df1, on='nct_id', how='inner')
+
+    # Fill nas
+    df['arms'] = df['arms'].fillna(2).astype(int)
+    df['facilities'] = df['facilities'].fillna(1).astype(int)
+    df['usfacility'] = df['usfacility'].fillna(True).astype(bool)
+
+    # human names
+    human_names = {'facilities': 'number of facilities',
+                   'year': 'year trial started',
+                   'duration': 'study duration (months)',
+                   'usfacility': 'has facilities in US',
+                   'arms': 'number of arms',
+                   **i_human_names}
+
+    return df, human_names
+
+
+def gather_all_data():
+    """ Connect to AACT database and extract data of interest
+    """
 
     # Connect to database
-    engine = _connectdb()
+    conn, meta = _connectdb()
 
-    # ================ Gather fe/male counts from 'baseline_measurements'
-    colnames = {'nct_id': 'nct_id',
-                'category': 'category',
-                'classification': 'classification',
-                'param_value_num': 'count'}
-    meas = pd.read_sql_table('baseline_measurements', engine,
-                             columns=colnames.keys()).rename(columns=colnames)
-    meas.set_index('nct_id', inplace=True)
+    # Gather data
+    funcs = (_gather_conditions,
+             _gather_interventions,
+             _gather_keywords,
+             _gather_minage,
+             _gather_phase,
+             _gather_sex,
+             _gather_otherstuff,
+             _gather_response)
 
-    # Determine if these particpant group counts are for fe/male
-    sexes = ['male', 'female']
-    for s in sexes:
-        filt = ((meas['category'].str.lower().str.match(s) |
-                 meas['classification'].str.lower().str.match(s)) &
-                meas['count'].notnull())
-        if fill_intelligent:
-            meas[s] = int(0)
+    df = None
+    human_names = {}
+    for f in funcs:
+        newdf, newhn = f(conn=conn, meta=meta)
+        human_names = {**human_names, **newhn}
+        if df is None:
+            df = newdf
         else:
-            meas[s] = np.nan
-        meas.loc[filt, s] = meas[filt]['count']
-
-    # Group/sum by study id, forcing those with no info back to nans
-    noinfo = meas[sexes].groupby('nct_id').apply(lambda x: True if np.all(np.isnan(x)) else False)
-    meas = meas[sexes].groupby('nct_id').sum()
-
-    # Convert to fraction male
-    meas['malefraction'] = meas['male']/(meas['female']+meas['male'])
-    meas.drop(columns=sexes, inplace=True)
-
-    if fill_intelligent:
-        meas['malefraction'] = meas['malefraction'].fillna(0.5).astype(float) # asumme 50/50 split
-    else:
-        meas.loc[noinfo, 'malefraction'] = np.NaN
-
-    # human-readable names
-    meas_humannames = {'malefraction': 'fraction of males'}
-
-    # ================ Gather condition MeSH terms from 'browse_conditions'
-    colnames = {'nct_id': 'nct_id',
-                'mesh_term': 'cond'}
-    conds = pd.read_sql_table('browse_conditions', engine,
-                              columns=colnames.keys()
-                              ).rename(columns=colnames).set_index('nct_id')
-    conds['cond'] = conds['cond'].str.lower()
-
-    # Limit to the to N terms & create dummy vars
-    topN_conds = conds['cond'].value_counts().head(N).index.tolist()    
-
-    conds['cond'] = [re.sub(r'[^a-z]', '', x) if x in topN_conds
-                     else None for x in conds['cond']]
-    conds = pd.get_dummies(conds).groupby('nct_id').any()
-
-    # human readable names
-    prefix = colnames['mesh_term']
-    topN_conds_colnames = []
-    for c in topN_conds:
-        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
-        topN_conds_colnames.append(dummyname)
-
-    conds_humannames = dict(zip(topN_conds_colnames, topN_conds))
-
-    # ================ Gather intervention MeSH terms in 'browse_interventions'
-    colnames = {'nct_id': 'nct_id',
-                'mesh_term': 'intv'}    
-    intv = pd.read_sql_table('browse_interventions', engine,
-                             columns=colnames.keys()
-                             ).rename(columns=colnames).set_index('nct_id')
-    intv['intv'] = intv['intv'].str.lower()
-
-    # Limit to the to N terms & create dummy vars
-    topN_intv = intv['intv'].value_counts().head(N).index.tolist()
-    intv['intv'] = [re.sub(r'[^a-z]', '', x) if x in topN_intv 
-                    else None for x in intv['intv']]
-    intv = pd.get_dummies(intv).groupby('nct_id').any()
-
-    # human readable names
-    prefix = colnames['mesh_term']
-    topN_intv_colnames = []
-    for c in topN_intv:
-        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
-        topN_intv_colnames.append(dummyname)
-
-    intv_humannames = dict(zip(topN_intv_colnames, topN_intv))
-
-    # ================ Gather various info from 'calculated_values'  
-    colnames = {'nct_id': 'nct_id',
-                'number_of_facilities': 'facilities',
-                'registered_in_calendar_year': 'year',
-                'actual_duration': 'duration',
-                'has_us_facility': 'usfacility',
-                'minimum_age_num': 'minimum_age_num',
-                'minimum_age_unit': 'minimum_age_unit'}
-    calc = pd.read_sql_table('calculated_values', engine,
-                             columns=colnames.keys()
-                             ).rename(columns=colnames).set_index('nct_id')
-
-    # convert age units into years
-    unit_map = {'year': 1., 'month':1/12., 'week': 1/52.1429,
-                'day': 1/365.2422, 'hour': 1/8760., 'minute': 1/525600.}
-
-    calc['minimum_age_unit'] = [re.sub(r's$', '', x).strip() if x is not None
-                                else None for x in
-                                calc['minimum_age_unit'].str.lower()]
-    calc['minimum_age_factor'] = calc['minimum_age_unit'].map(unit_map)
-    calc['minimum_age_years'] = (calc['minimum_age_num'] *
-                                 calc['minimum_age_factor'])
-
-    # only keep colums we need, & rename some
-    colnames2 = {'facilities': 'facilities',
-                'year': 'year',
-                'duration': 'duration',
-                'usfacility': 'usfacility',
-                'minimum_age_years': 'minage'} # removing maxage - mostly empty not useful
-    calc = calc[list(colnames2.keys())].rename(columns=colnames2)
-    
-    # Fill nans with best-guesses
-    if fill_intelligent:
-        calc['minage'] = calc['minage'].fillna(0).astype(int) # assume minage is 0
-        calc['usfacility'] = calc['usfacility'].fillna(True) # assume yes it has US facility
-        calc['facilities'] = calc['facilities'].fillna(1).astype(int) # assume 1 facility
-
-    # human-readable names
-    calc_humannames = {colnames2[colnames['number_of_facilities']]: 'number of facilities',
-                       colnames2[colnames['registered_in_calendar_year']]: 'calendar year trial started',
-                       colnames2[colnames['actual_duration']]: 'study duration (months)',
-                       colnames2[colnames['has_us_facility']]: 'at least one facility in the US',
-                       colnames2['minimum_age_years']: 'minimum age (years)' }
-
-    # ================ Gather intervention type info from 'interventions' 
-    colnames = {'nct_id': 'nct_id',
-                'intervention_type': 'intvtype'}
-    intvtype = pd.read_sql_table('interventions', engine,
-                             columns=colnames.keys()
-                             ).rename(columns=colnames).set_index('nct_id')
-    
-    # drop duplicates
-    intvtype = intvtype[~intvtype.index.duplicated(keep='first')]
-
-    # convert to lowercase, remove non-alphabetic characters
-    topN_intvtype = intvtype['intvtype'].unique().tolist()
-    intvtype['intvtype'] = [re.sub(r'[^a-z]', '', x)
-                            for x in intvtype['intvtype'].str.lower()]
-    intvtype = pd.get_dummies(intvtype).groupby('nct_id').any()
-
-    # human-readable names
-    prefix = colnames['intervention_type']
-    topN_intvtype_colnames = []
-    for c in topN_intvtype:
-        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c.lower())
-        topN_intvtype_colnames.append(dummyname)
-
-    intvtype_humannames = dict(zip(topN_intvtype_colnames, topN_intvtype))
+            df = df.merge(newdf, on='nct_id', how='inner')
+    df = df.set_index('nct_id')
 
 
-    # ================ Gather keywords info from 'keywords' (only keep top N)
-    colnames = {'nct_id': 'nct_id',
-                'name': 'keyword'}
-    words = pd.read_sql_table('keywords', engine,
-                              columns=colnames.keys()
-                              ).rename(columns=colnames).set_index('nct_id')
-    words['keyword'] = words['keyword'].str.lower()
-
-    # Limit to the to N terms & create dummy vars
-    topN_words = words['keyword'].value_counts().head(N).index.tolist()
-    words['keyword'] = [re.sub(r'[^a-z]', '', x) if x in topN_words
-                        else None for x in words['keyword']]
-    words = pd.get_dummies(words).groupby('nct_id').any()
-
-    # human-readable names
-    prefix = colnames['name']
-    topN_words_colnames = []
-    for c in topN_words:
-        dummyname = prefix + '_' + re.sub(r'[^a-z]', '', c)
-        topN_words_colnames.append(dummyname)
-
-    words_humannames = dict(zip(topN_words_colnames, topN_words))
-
-    # ================ Gather various info from 'studies' (filter for Completed & Inverventional studies only!)
-    colnames = {'nct_id': 'nct_id',
-                'study_type': 'studytype',
-                'overall_status': 'status',
-                'phase': 'phase',
-                'number_of_arms': 'arms'}
-    studies = pd.read_sql_table('studies', engine,
-                                columns=colnames.keys()
-                                ).rename(columns=colnames).set_index('nct_id')
-    
-    # filter to only keep 'Completed' studies
-    filt = (studies['status'].str.match('Completed') & 
-            studies['studytype'].str.match('Interventional'))
-    studies = studies[filt].drop(columns=['status', 'studytype'])
-
-    # parse study phases
-    for n in [1,2,3, 4]:
-        filt = studies['phase'].str.contains(str(n))
-        studies['phase'+str(n)] = False
-        studies.loc[filt,'phase'+str(n)] = True
-    studies.drop(columns=['phase'], inplace=True)
-
-    if fill_intelligent:
-        studies['arms'] = studies['arms'].fillna(1).astype(int)
-
-    # human-readable names
-    studies_humannames = {colnames['number_of_arms']: 'number of study arms',
-                          'phase1': 'phase 1',
-                          'phase2': 'phase 2',
-                          'phase3': 'phase 3',
-                          'phase4': 'phase 4'}
-
-    # ================ Combine all dataframes together!
-    # Note: inner join all data onto 'studies' (so only keep data for completed, 
-    # interventional studies)
-
-    df = studies
-    for d in [meas, conds, intv, calc, intvtype, words]:
-        df = df.join(d, how='inner')
-
-    # join all human-readable names
-    human_names = {**studies_humannames,
-            **meas_humannames,
-            **conds_humannames,
-            **intv_humannames,
-            **calc_humannames,
-            **intvtype_humannames,
-            **words_humannames}
-
-    return (df, human_names)
 
 
 def _remove_highdrops(df, thresh=1.0):
