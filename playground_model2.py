@@ -160,14 +160,14 @@ print('R2 test score:', r2_test)
 
 # === SETUP RANDOM FOREST
 reg = RandomForestRegressor()
-nfolds = 10
+nfolds = 5
 
 
 # === GRID SEARCH FOR HYPERPARAMETERS
 clf = GridSearchCV(reg, 
-             param_grid={'n_estimators': [100, 1000],
+             param_grid={'n_estimators': [20],
                          'max_depth': [10],
-                         'max_features': [None],
+                         'max_features': [75],
                          'min_samples_leaf': [5]},
              scoring=make_scorer(r2_score), cv=nfolds)
 clf.fit(X, y)
@@ -184,7 +184,10 @@ print("Best hyperparameters: {}".format(best_params))
 
 
 # === FIT RF-REGRESSION WITH BEST PARAMS
-best_params = {'n_estimators': 1000, 'max_depth': 10, 'min_samples_leaf': 5}
+best_params = {'n_estimators': 20,
+               'max_depth': 10,
+               'min_samples_leaf': 5,
+               'max_features': 75}
 
 reg = RandomForestRegressor(**best_params)
 reg.fit(X, y)
@@ -214,6 +217,7 @@ sns.distplot(y-ypred, bins=50, kde=False, vertical=True)
 sns.despine(fig=fig, bottom=True, left=True)
 plt.xticks([])
 plt.ylabel('Residuals')
+plt.xlabel('Frequency')
 plt.ylim((-0.6, 0.6))
 
 # residuals vs predicted
@@ -221,7 +225,7 @@ plt.subplot(1, 2, 2)
 sns.regplot(ypred, y-ypred, fit_reg=False, scatter_kws={'alpha': 0.2})
 plt.ylim((-0.6, 0.6))
 sns.despine()
-plt.xlabel('predicted')
+plt.xlabel('Predicted value')
 plt.show()
 
 
@@ -320,33 +324,7 @@ plt.ylabel('dropout rate')
 plt.legend()
 plt.show()
 
-
-# === SETUP RANDOM FOREST
-regq = RandomForestQuantileRegressor()
-nfolds = 5
-
-# === GRID SEARCH FOR HYPERPARAMETERS
-clf = GridSearchCV(regq,
-             param_grid={'n_estimators': [1000],
-                         'max_depth': [10, 50],
-                         'max_features': [None],
-                         'min_samples_leaf': [5]},
-             scoring=make_scorer(r2_score), cv=nfolds)
-clf.fit(X, y)
-
-print("* Grid scores:")
-means = clf.cv_results_['mean_test_score']
-stds = clf.cv_results_['std_test_score']
-for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-    print("  %0.3f (+/-%0.03f) for %r"
-          % (mean, std * 2, params))
-
-best_params = clf.best_params_
-print("Best hyperparameters: {}".format(best_params))
-
-
 # === FIT RF-REGRESSION WITH BEST PARAMS
-best_params = {'n_estimators': 1000, 'max_depth': 50, 'min_samples_leaf': 5}
 regq = RandomForestQuantileRegressor(**best_params)
 regq.fit(X, y)
 
@@ -362,7 +340,7 @@ CV_scores = cross_val_score(regq, X, y,
 print('{:d}-fold CV R2 score: {:0.2f}+/-{:0.2f}'
       .format(nfolds, CV_scores.mean(), CV_scores.std()))
 
-# 5-fold CV R2 score: 0.47+/-0.02
+# 5-fold CV R2 score: 0.46+/-0.02
 
 
 # === PLOT RESIDUALS
@@ -377,6 +355,7 @@ sns.distplot(y-ypred, bins=50, kde=False, vertical=True)
 sns.despine(fig=fig, bottom=True, left=True)
 plt.xticks([])
 plt.ylabel('Residuals')
+plt.xlabel('Frequency')
 plt.ylim((-0.6, 0.6))
 
 # residuals vs predicted
@@ -384,7 +363,7 @@ plt.subplot(1, 2, 2)
 sns.regplot(ypred, y-ypred, fit_reg=False, scatter_kws={'alpha': 0.2})
 plt.ylim((-0.6, 0.6))
 sns.despine()
-plt.xlabel('predicted')
+plt.xlabel('Predicted value')
 plt.show()
 
 
@@ -523,16 +502,6 @@ with open(filename, 'wb') as output_file:
     pk.dump(regq, output_file)
 
 
-
-
-trainsize = 400
-idx = range(size)
-#shuffle the data
-np.random.shuffle(idx)
-rf = RandomForestRegressor(n_estimators=1000, min_samples_leaf=1)
-rf.fit(X, y)
-
-
 # ===============================================================
 # COMPUTE TEST SET SCORE - RF
 # ===============================================================
@@ -548,10 +517,10 @@ Xtest = Xtest_raw.as_matrix()
 ytest = ytest_raw[['droprate']].as_matrix()
 
 
-r2_test = reg.score(Xtest, ytest)
+r2_test = regq.score(Xtest, ytest)
 
 
-print('R2 test score:', r2_test)
+print('R2 test score:', r2_test) # Test score: 0.452
 
 
 

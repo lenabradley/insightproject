@@ -4,6 +4,118 @@
 		"selected_items":
 		[
 			[
+				"_gather",
+				"_gather_otherstuff\tfunction"
+			],
+			[
+				"_gather_",
+				"_gather_sex\tfunction"
+			],
+			[
+				"interv",
+				"intervention_type"
+			],
+			[
+				"inter",
+				"intervention_type"
+			],
+			[
+				"nu",
+				"number_of_arms"
+			],
+			[
+				"study",
+				"study_type"
+			],
+			[
+				"has",
+				"has_us_facility"
+			],
+			[
+				"fill",
+				"fillna"
+			],
+			[
+				"huma",
+				"human_names"
+			],
+			[
+				"minimu",
+				"minimum_age_num"
+			],
+			[
+				"mini",
+				"minimum_age_num"
+			],
+			[
+				"number",
+				"number_of_facilities"
+			],
+			[
+				"human",
+				"human_names\tstatement"
+			],
+			[
+				"group",
+				"group_column\tparam"
+			],
+			[
+				"gropu",
+				"group_column\tparam"
+			],
+			[
+				"drop",
+				"droprate"
+			],
+			[
+				"not",
+				"notcompleted"
+			],
+			[
+				"down",
+				"downcase_mesh_term"
+			],
+			[
+				"mesh",
+				"mesh_term"
+			],
+			[
+				"param",
+				"param_value_num"
+			],
+			[
+				"base",
+				"baseline_measurements"
+			],
+			[
+				"hum",
+				"human_names\tstatement"
+			],
+			[
+				"miles",
+				"milestone_count"
+			],
+			[
+				"enrol",
+				"enrollment"
+			],
+			[
+				"sql",
+				"sqlalchemy\tmodule"
+			],
+			[
+				"enroll",
+				"enrollment"
+			],
+			[
+				"dro",
+				"drop_withdrawals"
+			],
+			[
+				"_con",
+				"_connectdb\tfunction"
+			],
+			[
 				"Confide",
 				"Confidence"
 			],
@@ -132,10 +244,6 @@
 				"data_holder"
 			],
 			[
-				"drop",
-				"dropped"
-			],
-			[
 				"model",
 				"model_selection"
 			],
@@ -180,24 +288,12 @@
 				"arms"
 			],
 			[
-				"fill",
-				"fill_intelligent\tparam"
-			],
-			[
 				"minim",
 				"minimum_age_factor"
 			],
 			[
-				"mini",
-				"minimum_age_unit"
-			],
-			[
 				"unq",
 				"unique_ids\tstatement"
-			],
-			[
-				"_gather",
-				"_gather_response\tfunction"
 			],
 			[
 				"featur",
@@ -316,10 +412,6 @@
 				"formula\tstatement"
 			],
 			[
-				"not",
-				"notnull"
-			],
-			[
 				"start",
 				"start_year"
 			],
@@ -384,10 +476,6 @@
 				"interval_l\tstatement"
 			],
 			[
-				"inter",
-				"interval_l\tstatement"
-			],
-			[
 				"diagn",
 				"diagnotic_plots\tfunction"
 			],
@@ -426,153 +514,11 @@
 			[
 				"norm",
 				"norm_hist"
-			],
-			[
-				"enrol",
-				"enrolled"
-			],
-			[
-				"pars",
-				"parse_args"
-			],
-			[
-				"droprate",
-				"droprate_tform"
-			],
-			[
-				"remove",
-				"remove_drops"
-			],
-			[
-				"thres",
-				"thresh"
-			],
-			[
-				"Data",
-				"DataFrame"
-			],
-			[
-				"ag",
-				"age_range_years"
-			],
-			[
-				"index",
-				"index_col"
-			],
-			[
-				"va",
-				"values"
-			],
-			[
-				"value",
-				"value_counts"
-			],
-			[
-				"down",
-				"downcase_name"
-			],
-			[
-				"ga",
-				"gather_features"
-			],
-			[
-				"min",
-				"minimum_age_years"
-			],
-			[
-				"nu",
-				"number_of_facilities"
-			],
-			[
-				"actual",
-				"actual_duration"
-			],
-			[
-				"ren",
-				"rename"
-			],
-			[
-				"mi",
-				"minimum_age_num"
-			],
-			[
-				"calv",
-				"calcvals"
-			],
-			[
-				"conn",
-				"connectdb"
-			],
-			[
-				"cal",
-				"calc_dropout"
-			],
-			[
-				"enr",
-				"enrolled"
-			],
-			[
-				"stud",
-				"study_type"
 			]
 		]
 	},
 	"buffers":
 	[
-		{
-			"file": "data.py",
-			"settings":
-			{
-				"buffer_size": 23185,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "playground_datanlp.py",
-			"settings":
-			{
-				"buffer_size": 2964,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "playground_model1.py",
-			"settings":
-			{
-				"buffer_size": 7203,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "playground_model2.py",
-			"settings":
-			{
-				"buffer_size": 15841,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "/home/lena/Insight/app/app.py",
-			"settings":
-			{
-				"buffer_size": 19200,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "data_exploration.py",
-			"settings":
-			{
-				"buffer_size": 2178,
-				"encoding": "UTF-8",
-				"line_ending": "Unix"
-			}
-		}
 	],
 	"build_system": "",
 	"build_system_choices":
@@ -613,14 +559,21 @@
 	},
 	"file_history":
 	[
+		"/home/lena/Insight/leetcode/problem_1/Fellow Codes Go Here/lena_bartell.py",
+		"/home/lena/Insight/leetcode/.gitignore",
+		"/home/lena/Insight/project/playground_model1.py",
+		"/home/lena/Insight/project/playground_datanlp.py",
+		"/home/lena/Insight/project/data.py",
+		"/home/lena/Insight/play.py",
+		"/home/lena/Insight/project/data_exploration.py",
+		"/home/lena/Insight/project/playground_model2.py",
+		"/home/lena/Insight/app/app.py",
 		"/home/lena/Insight/project/archived/config.py",
 		"/home/lena/Insight/project/playground.py",
 		"/home/lena/Insight/project/config.py",
-		"/home/lena/Insight/app/app.py",
 		"/home/lena/Insight/project/demo.py",
 		"/home/lena/Insight/project/model1.py",
 		"/home/lena/Insight/project/app_model1/app_model1.py",
-		"/home/lena/Insight/project/playground_model1.py",
 		"/home/lena/Insight/project/app/app.py",
 		"/home/lena/Insight/project/app_model1/helpfunctions.py",
 		"/home/lena/Insight/app/Procfile",
@@ -649,7 +602,7 @@
 	],
 	"find":
 	{
-		"height": 44.0
+		"height": 39.0
 	},
 	"find_in_files":
 	{
@@ -663,6 +616,9 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"male",
+			"distinct",
+			"select(",
 			"rfqr",
 			"reg",
 			"criteri",
@@ -741,293 +697,14 @@
 	"groups":
 	[
 		{
-			"selected": 4,
 			"sheets":
 			[
-				{
-					"buffer": 0,
-					"file": "data.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 23185,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								23185,
-								23185
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"complete_parameters": false,
-							"rulers":
-							[
-								80
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 60.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 3,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
-					"file": "playground_datanlp.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 2964,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								2405,
-								2405
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"auto_name": "",
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 240.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 5,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "playground_model1.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 7203,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								0,
-								0
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 4,
-					"type": "text"
-				},
-				{
-					"buffer": 3,
-					"file": "playground_model2.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 15841,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								14367,
-								14367
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 9356.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 4,
-					"file": "/home/lena/Insight/app/app.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 19200,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								10606,
-								10606
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 3897.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 0,
-					"type": "text"
-				},
-				{
-					"buffer": 5,
-					"file": "data_exploration.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 2178,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								1742,
-								1742
-							]
-						],
-						"settings":
-						{
-							"auto_complete_triggers":
-							[
-								{
-									"characters": ".",
-									"selector": "source.python - string - comment - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								},
-								{
-									"characters": ".",
-									"selector": "source.python - string - constant.numeric"
-								}
-							],
-							"auto_name": "",
-							"syntax": "Packages/Python/Python.sublime-syntax",
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 2,
-					"type": "text"
-				}
 			]
 		}
 	],
 	"incremental_find":
 	{
-		"height": 32.0
+		"height": 27.0
 	},
 	"input":
 	{
@@ -1068,7 +745,7 @@
 	"project": "insight.sublime-project",
 	"replace":
 	{
-		"height": 60.0
+		"height": 50.0
 	},
 	"save_all_on_build": true,
 	"select_file":
@@ -1082,12 +759,12 @@
 	},
 	"select_project":
 	{
-		"height": 0.0,
+		"height": 500.0,
 		"last_filter": "",
 		"selected_items":
 		[
 		],
-		"width": 0.0
+		"width": 380.0
 	},
 	"select_symbol":
 	{
